@@ -23,7 +23,6 @@ RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
 # TODO: explore setRealTimeSimulation
-# TODO: put in franka model and free from Kuka stuff
 
 class CustomRobotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
@@ -87,8 +86,8 @@ class CustomRobotEnv(gym.Env):
         p.loadURDF(os.path.join(self._urdfRoot, "table/table.urdf"), 0.5000000, 0.00000, -.820000,
                    0.000000, 0.000000, 0.0, 1.0)
 
-        self.trayUid = p.loadURDF(os.path.join(self._urdfRoot, "tray/tray.urdf"), 0.640000,
-                                  0.075000, -0.190000, 0.000000, 0.000000, 1.000000, 0.000000)
+        self._trayUid = p.loadURDF(os.path.join(self._urdfRoot, "tray/tray.urdf"), 0.640000,
+                                   0.075000, -0.190000, 0.000000, 0.000000, 1.000000, 0.000000)
 
         xpos = 0.55 + 0.12 * random.random()
         ypos = 0 + 0.2 * random.random()
@@ -98,8 +97,8 @@ class CustomRobotEnv(gym.Env):
                                    orn[0], orn[1], orn[2], orn[3])
 
         p.setGravity(0, 0, -10)
-        self._kuka = p.loadURDF('../../Robot/pybullet_robots/data/franka_panda/panda.urdf', basePosition=[0, 0, 0],
-                              useFixedBase=1) #kuka.Kuka(urdfRootPath=self._urdfRoot, timeStep=self._timeStep)
+        self._robot = p.loadURDF('../../Robot/pybullet_robots/data/franka_panda/panda.urdf', basePosition=[0, 0, 0],
+                                 useFixedBase=1)
         self._envStepCounter = 0
         p.stepSimulation()
         self._observation = self.getExtendedObservation()
@@ -117,24 +116,19 @@ class CustomRobotEnv(gym.Env):
         self._observation = []
 
         # Robot's joint space pos
-        jointPos = [j[0] for j in self._p.getJointStates(self._kuka, range(9))]
-        #print('Joint pos: ', end=' ')
-        #print(jointPos)
-        world_position = self._p.getLinkState(self._kuka, 9)[0]
+        jointPos = [j[0] for j in self._p.getJointStates(self._robot, range(9))]
+
+        # Robot's Cartesian end-effector pos
+        world_position = self._p.getLinkState(self._robot, 9)[0]
         cartePos = world_position[:3]
-        #print('Cart pos: ', end=' ')
-        #print(cartePos)
 
         # Block's Cartesian position
         blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
-        #print('Block pos: ', end=' ')
-        #print(blockPos)
 
         self._observation.extend(blockPos)
         self._observation.extend(cartePos)
         self._observation.extend(jointPos)
-        #print('Observaton:')
-        #print(self._observation)
+
         return self._observation
 
     def step(self, action):
@@ -142,7 +136,7 @@ class CustomRobotEnv(gym.Env):
         print(action, repetitions)
         for i in range(repetitions):  # self._actionRepeat
             print(action[:-1])
-            self._p.setJointMotorControlArray(self._kuka, range(9), self._p.POSITION_CONTROL,
+            self._p.setJointMotorControlArray(self._robot, range(9), self._p.POSITION_CONTROL,
                                               targetPositions=action[:-1])
             p.stepSimulation()
             if self._termination:
@@ -152,13 +146,10 @@ class CustomRobotEnv(gym.Env):
             time.sleep(self._timeStep)
         self._observation = self.getExtendedObservation()
 
-        # print("self._envStepCounter")
-        # print(self._envStepCounter)
-
         done = self._termination
 
         reward = self._reward()
-        time.sleep(0.1)
+        #time.sleep(0.01)
 
         return np.array(self._observation), reward, done, {}
 
@@ -166,7 +157,7 @@ class CustomRobotEnv(gym.Env):
         if mode != "rgb_array":
             return np.array([])
 
-        base_pos, orn = self._p.getBasePositionAndOrientation(self._kuka)
+        base_pos, orn = self._p.getBasePositionAndOrientation(self._robot)
         view_matrix = self._p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=base_pos,
                                                                 distance=self._cam_dist,
                                                                 yaw=self._cam_yaw,
@@ -192,47 +183,41 @@ class CustomRobotEnv(gym.Env):
 
     @property
     def _termination(self):
-        # print (self._kuka.endEffectorPos[2])
-        state = p.getLinkState(self._kuka, self._gripperIndex)
-        actualEndEffectorPos = state[0]
 
-        # print("self._envStepCounter")
-        # print(self._envStepCounter)
         if self.terminated or self._envStepCounter > self._maxSteps:
             self._observation = self.getExtendedObservation()
             return True
+
         maxDist = 0.005
-        closestPoints = p.getClosestPoints(self.trayUid, self._kuka, maxDist)
+        closestPoints = p.getClosestPoints(self._trayUid, self._robot, maxDist)
 
-        blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
-        gripperPos, gripperOrn = p.getLinkState(self._kuka, self._gripperIndex)[0:2]
-
-        # Implements: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
-        cartDistance = distance.euclidean(blockPos, gripperPos)
-
-        if cartDistance < 0.2:
-            print('##########\n'*2 + 'GOAL REACHED!' + '##########\n'*2)
+        if len(closestPoints):  # (actualEndEffectorPos[2] <= -0.43):
             self.terminated = 1
+            self._observation = self.getExtendedObservation()
             return True
+
         return False
 
     def _reward(self):
-        reward = 0
 
         blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
-        gripperPos, gripperOrn = p.getLinkState(self._kuka, self._gripperIndex)[0:2]
+        gripperPos, gripperOrn = p.getLinkState(self._robot, self._gripperIndex)[0:2]
 
-        # Implements: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
+        # Implements analogous to: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
         cartDistance = distance.euclidean(blockPos, gripperPos)
 
-        distChange = self._last_dist_to_obj - cartDistance
-        self._last_dist_to_obj = cartDistance
-        reward += -cartDistance/10 + distChange
+        #distChange = self._last_dist_to_obj - cartDistance
+        #self._last_dist_to_obj = cartDistance
+        #reward += -cartDistance/10 + distChange
 
-        if blockPos[2] > 0.2:
+        reward = - cartDistance
+
+        maxDist = 0.005
+        closestPoints = p.getClosestPoints(self._trayUid, self._robot, maxDist)
+        if len(closestPoints):
             # According to provided implementation: Gripper has reached target!
             goalReward = 1
-            timeReward = 1/self._envStepCounter
+            timeReward = 200/self._envStepCounter  # if done after 200 time steps, then +1
             reward += (goalReward + timeReward)
             print("#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
             time.sleep(5)

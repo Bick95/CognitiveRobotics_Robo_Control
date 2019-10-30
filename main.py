@@ -14,10 +14,10 @@ env = eval(env_name + '(renders=True)')  # <-- Allows for making the Env-name va
 env = DummyVecEnv([lambda: env])         # The algorithms require a vectorized environment to run, hence vectorize
 
 # Create custom NN architecture
-policy_kwargs = dict(act_fun=tf.nn.tanh, net_arch=[50, 50])
+policy_kwargs = dict(act_fun=tf.nn.tanh, net_arch=[256, 256])
 
 # Create the PPO agent
-model = PPO2("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1, learning_rate=2.5e-3)  # env was before string: "CartPole-v1"
+model = PPO2("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1, learning_rate=2.5e-5)  # env was before string: "CartPole-v1"
 
 # Retrieve the environment
 env = model.get_env()
