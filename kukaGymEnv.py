@@ -215,7 +215,12 @@ class KukaGymEnv(gym.Env):
     return rgb_array
 
   def _termination(self):
+    #print (self._kuka.endEffectorPos[2])
+    state = p.getLinkState(self._kuka.kukaUid, self._kuka.kukaEndEffectorIndex)
+    actualEndEffectorPos = state[0]
 
+    #print("self._envStepCounter")
+    #print(self._envStepCounter)
     if (self.terminated or self._envStepCounter > self._maxSteps):
       self._observation = self.getExtendedObservation()
       return True
