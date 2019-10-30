@@ -118,13 +118,23 @@ class CustomRobotEnv(gym.Env):
 
         # Robot's joint space pos
         jointPos = [j[0] for j in self._p.getJointStates(self._kuka, range(9))]
+        #print('Joint pos: ', end=' ')
+        #print(jointPos)
+        world_position = self._p.getLinkState(self._kuka, 9)[0]
+        cartePos = world_position[:3]
+        #print('Cart pos: ', end=' ')
+        #print(cartePos)
 
         # Block's Cartesian position
         blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
+        #print('Block pos: ', end=' ')
+        #print(blockPos)
 
         self._observation.extend(blockPos)
+        self._observation.extend(cartePos)
         self._observation.extend(jointPos)
-
+        #print('Observaton:')
+        #print(self._observation)
         return self._observation
 
     def step(self, action):
@@ -148,7 +158,7 @@ class CustomRobotEnv(gym.Env):
         done = self._termination
 
         reward = self._reward()
-        time.sleep(0.2)
+        time.sleep(0.1)
 
         return np.array(self._observation), reward, done, {}
 
@@ -215,19 +225,19 @@ class CustomRobotEnv(gym.Env):
         # Implements: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
         cartDistance = distance.euclidean(blockPos, gripperPos)
 
-        distReward = self._last_dist_to_obj - cartDistance
-        self._last_dist_to_obj = cartDistance * 10
-        reward += distReward
+        distChange = self._last_dist_to_obj - cartDistance
+        self._last_dist_to_obj = cartDistance
+        reward += -cartDistance/10 + distChange
 
         if blockPos[2] > 0.2:
             # According to provided implementation: Gripper has reached target!
             goalReward = 1
             timeReward = 1/self._envStepCounter
-            reward = distReward + goalReward + timeReward
+            reward += (goalReward + timeReward)
             print("#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
             time.sleep(5)
 
-        print('Current step-ctr-subtraction: ' + str(self._envStepCounter))
+        print('Current step-ctr: ' + str(self._envStepCounter))
 
         print('Reward: ' + str(reward))
         return reward
