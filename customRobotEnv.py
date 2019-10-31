@@ -1,4 +1,5 @@
-import os, inspect
+import os, inspect, random, sys
+
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 print("current_dir=" + currentdir)
@@ -48,9 +49,9 @@ class CustomRobotEnv(gym.Env):
         self._cam_yaw = 180
         self._cam_pitch = -40
         self._last_dist_to_obj = 0.0
-        self._gripperIndex = 9
 
         self._p = p
+
         if self._renders:
             cid = p.connect(p.SHARED_MEMORY)
             if (cid < 0):
@@ -60,21 +61,42 @@ class CustomRobotEnv(gym.Env):
             p.connect(p.DIRECT)
         # timinglog = p.startStateLogging(p.STATE_LOGGING_PROFILE_TIMINGS, "kukaTimings.json")
         self.seed()
+        self._robot = p.loadURDF('../../Robot/pybullet_robots/data/franka_panda/panda.urdf', basePosition=[0, 0, 0],
+                                 useFixedBase=1)
+        self._num_joints = 8  #self._p.getNumJoints(self._robot)
+        self._gripperIndex = 9  #self._p.getNumJoints(self._robot)
+        #print('Num joints: ' + str(self._num_joints))
+        #print('Gripper idx: ' + str(self._gripperIndex))
+        #time.sleep(5)
         self.reset()
+
+
         observationDim = len(self.getExtendedObservation())
         # print("observationDim")
         # print(observationDim)
 
         observation_high = np.array([largeValObservation] * observationDim)
-        if (self._isDiscrete):
-            self.action_space = spaces.Discrete(9+1)
+        if self._isDiscrete:
+            self.action_space = spaces.Discrete(3+1)
         else:
-            action_dim = 9+1
+            action_dim = self._num_joints+1
             self._action_bound = 1
             action_high = np.array([self._action_bound] * action_dim)
             self.action_space = spaces.Box(-action_high, action_high)
         self.observation_space = spaces.Box(-observation_high, observation_high)
         self.viewer = None
+
+    def get_random_joint_config(self):
+        return [random.uniform(-1, 1) for _ in range(self._num_joints)]
+
+    def apply_actions(self, config):
+         self._p.setJointMotorControlArray(self._robot, range(self._num_joints), self._p.POSITION_CONTROL,
+                                           targetPositions=config)
+         for _ in range(100):
+            self._p.stepSimulation()
+        ### BETTER:
+        #for i in range(len(config)):
+        #    self._p.resetJointState(self._robot, i, config[i])
 
     def reset(self):
         self.terminated = 0
@@ -100,6 +122,7 @@ class CustomRobotEnv(gym.Env):
         self._robot = p.loadURDF('../../Robot/pybullet_robots/data/franka_panda/panda.urdf', basePosition=[0, 0, 0],
                                  useFixedBase=1)
         self._envStepCounter = 0
+        self.apply_actions(self.get_random_joint_config())
         p.stepSimulation()
         self._observation = self.getExtendedObservation()
         return np.array(self._observation)
@@ -116,7 +139,7 @@ class CustomRobotEnv(gym.Env):
         self._observation = []
 
         # Robot's joint space pos
-        jointPos = [j[0] for j in self._p.getJointStates(self._robot, range(9))]
+        jointPos = [j[0] for j in self._p.getJointStates(self._robot, range(self._num_joints))]
 
         # Robot's Cartesian end-effector pos
         world_position = self._p.getLinkState(self._robot, 9)[0]
@@ -127,21 +150,45 @@ class CustomRobotEnv(gym.Env):
 
         self._observation.extend(blockPos)
         self._observation.extend(cartePos)
-        self._observation.extend(jointPos)
+        #self._observation.extend(jointPos)
 
         return self._observation
 
     def step(self, action):
-        repetitions = int(abs(action[-1]*10))
+        #repetitions = int(abs(action[-1]*10))
+        repetitions = 5
         print(action, repetitions)
+
+        #maxForce = 0.001  # mimic joint friction
+        #mode = self._p.TORQUE_CONTROL
+
         for i in range(repetitions):  # self._actionRepeat
             print(action[:-1])
-            self._p.setJointMotorControlArray(self._robot, range(9), self._p.POSITION_CONTROL,
-                                              targetPositions=action[:-1])
+            #self._p.setJointMotorControlArray(self._robot, range(self._num_joints), self._p.POSITION_CONTROL,
+            #                                  targetPositions=action[:-1])
+            #for j in range(self._num_joints):
+            #    p.setJointMotorControl2(self._robot, j, controlMode=self._p.TORQUE_CONTROL,
+            #                            force=action[j]*100)  # force = here: torque
+            #    p.stepSimulation()
+            maxForce = 0.01
+            mode = p.VELOCITY_CONTROL
+            for j in range(self._num_joints):
+                p.setJointMotorControl2(bodyUniqueId=self._robot,
+                                        jointIndex=j,
+                                        controlMode=p.VELOCITY_CONTROL,
+                                        targetVelocity=action[j],
+                                        force=maxForce)
+
             p.stepSimulation()
             if self._termination:
                 break
             self._envStepCounter += 1
+        #for i in range(self._num_joints):
+        #    p.resetJointState(self._robot, i, action[i])
+        #    p.stepSimulation()
+        #    if self._termination:
+        #        break
+        #    self._envStepCounter += 1
         if self._renders:
             time.sleep(self._timeStep)
         self._observation = self.getExtendedObservation()
@@ -149,7 +196,7 @@ class CustomRobotEnv(gym.Env):
         done = self._termination
 
         reward = self._reward()
-        #time.sleep(0.01)
+        #time.sleep(0.1)
 
         return np.array(self._observation), reward, done, {}
 
@@ -188,10 +235,15 @@ class CustomRobotEnv(gym.Env):
             self._observation = self.getExtendedObservation()
             return True
 
-        maxDist = 0.005
-        closestPoints = p.getClosestPoints(self._trayUid, self._robot, maxDist)
+        blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
+        gripperPos, gripperOrn = p.getLinkState(self._robot, self._gripperIndex)[0:2]
 
-        if len(closestPoints):  # (actualEndEffectorPos[2] <= -0.43):
+        # Implements analogous to: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
+        cartDistance = distance.euclidean(blockPos, gripperPos)
+
+        maxDist = 0.005
+
+        if cartDistance < maxDist:
             self.terminated = 1
             self._observation = self.getExtendedObservation()
             return True
@@ -214,7 +266,9 @@ class CustomRobotEnv(gym.Env):
 
         maxDist = 0.005
         closestPoints = p.getClosestPoints(self._trayUid, self._robot, maxDist)
-        if len(closestPoints):
+        #if len(closestPoints):
+        if cartDistance < maxDist:
+            print('Cart dist: ' + str(cartDistance))
             # According to provided implementation: Gripper has reached target!
             goalReward = 1
             timeReward = 200/self._envStepCounter  # if done after 200 time steps, then +1
