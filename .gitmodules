@@ -1,0 +1,6 @@
+[submodule "RobotModels/Panda"]
+	path = RobotModels/Panda
+	url = https://github.com/Bick95/PandaRobot.jl.git
+[submodule "RobotModels/Pybullet_Robots"]
+	path = RobotModels/Pybullet_Robots
+	url = https://github.com/erwincoumans/pybullet_robots.git

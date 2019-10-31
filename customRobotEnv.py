@@ -51,6 +51,8 @@ class CustomRobotEnv(gym.Env):
         self._last_dist_to_obj = 0.0
 
         self._p = p
+        self._robo_path = 'RobotModels/Panda/deps/Panda/panda.urdf'
+        #self._robo_path = 'RobotModels/Pybullet_Robots/data/franka_panda/panda.urdf'
 
         if self._renders:
             cid = p.connect(p.SHARED_MEMORY)
@@ -61,7 +63,7 @@ class CustomRobotEnv(gym.Env):
             p.connect(p.DIRECT)
         # timinglog = p.startStateLogging(p.STATE_LOGGING_PROFILE_TIMINGS, "kukaTimings.json")
         self.seed()
-        self._robot = p.loadURDF('../../Robot/pybullet_robots/data/franka_panda/panda.urdf', basePosition=[0, 0, 0],
+        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
                                  useFixedBase=1)
         self._num_joints = 8  #self._p.getNumJoints(self._robot)
         self._gripperIndex = 9  #self._p.getNumJoints(self._robot)
@@ -119,7 +121,7 @@ class CustomRobotEnv(gym.Env):
                                    orn[0], orn[1], orn[2], orn[3])
 
         p.setGravity(0, 0, -10)
-        self._robot = p.loadURDF('../../Robot/pybullet_robots/data/franka_panda/panda.urdf', basePosition=[0, 0, 0],
+        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
                                  useFixedBase=1)
         self._envStepCounter = 0
         self.apply_actions(self.get_random_joint_config())
