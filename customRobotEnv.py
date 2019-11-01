@@ -206,7 +206,7 @@ class CustomRobotEnv(gym.Env):
 
     def step(self, action):
         #repetitions = int(abs(action[-1]*10))
-        repetitions = 1
+        repetitions = 5
         print('Actions: ', end='\t\t')
         print(action)
         #print('Actions clipped: ', end='\t')
@@ -215,22 +215,15 @@ class CustomRobotEnv(gym.Env):
         print('Repetitions: ', end='\t')
         print(repetitions)
 
-        '''
-        for j in range(self._num_joints):
-            self._p.setJointMotorControl2(bodyUniqueId=self._robot,
-                                          jointIndex=j,
-                                          controlMode=self._p.VELOCITY_CONTROL,
-                                          targetVelocity=action[j],
-                                          force=0.01)  # force = max force used to get to desired velocity
-        '''
+        jointPos = [state[0] for state in self._p.getJointStates(self._robot, range(self._num_joints))]
+        jointPos = [jointPos[i] + np.clip(action[i], -0.5, 0.5) for i in range(self._num_joints)]
 
-        # TODO: change such that only UPDATES of current position are going to be allowed. Clip updates. 
 
         self._p.setJointMotorControlArray(bodyUniqueId=self._robot,
                                           jointIndices=range(self._num_joints),
                                           controlMode=self._p.POSITION_CONTROL,
-                                          targetPositions=action[:-1],
-                                          forces=[0.5]*self._num_joints)
+                                          targetPositions=jointPos,
+                                          forces=[50]*self._num_joints)
 
         for i in range(repetitions):  # self._actionRepeat
             print('------------------######################---------------------')
@@ -248,7 +241,6 @@ class CustomRobotEnv(gym.Env):
         done = self._termination
 
         reward = self._reward()
-        #time.sleep(0.01)
 
         return np.array(self._observation), reward, done, {}
 
@@ -356,9 +348,11 @@ class CustomRobotEnv(gym.Env):
         elif self._envStepCounter > self._maxSteps:
             reward -= 2
         '''
+
         maxDist = 0.25
 
-        reward = - cartDistance if cartDistance > maxDist else 0.0
+        reward = self._last_dist_to_obj - cartDistance
+        self._last_dist_to_obj = cartDistance
 
         if cartDistance < maxDist:
             print('Cart dist: ' + str(cartDistance))
