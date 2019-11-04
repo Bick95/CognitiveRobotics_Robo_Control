@@ -229,8 +229,10 @@ class CustomRobotEnv(gym.Env):
         return self._observation
 
     def step(self, action):
-        #repetitions = int(abs(action[-1]*10))
-        repetitions = 5
+        # TODO: dis-/enable again?
+        minRep, maxRep = 1, 10
+        repetitions = min(maxRep, max(minRep, int(abs(action[-1]*10))))
+        # repetitions = 5
         print('Actions: ', end='\t\t')
         print(action)
         print('Repetitions: ', end='\t')
