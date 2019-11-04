@@ -417,7 +417,7 @@ class PandaRobotEnv(gym.Env):
             print('Current step-ctr: ' + str(self._envStepCounter))
             print('Cart dist: ' + str(self._dist_to_obj))
             print('Dir. devi: ' + str(self._dev_from_goal_vec))
-            time.sleep(1.5)
+            time.sleep(1)
 
         elif self._envStepCounter > self._maxSteps:
             # Goal not reached punishment
