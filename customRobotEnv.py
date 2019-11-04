@@ -32,8 +32,10 @@ class PandaRobotEnv(gym.Env):
                  isDiscrete=False,
                  maxSteps=1000,
                  fixedActionRepetitions=False,
-                 distMeasure=0):
+                 distMeasures=None):
 
+        if distMeasures is None:
+            distMeasures = [0, 'A']  # 0 = Euclidean distance, A = Use improved distance metric
         self._isDiscrete = isDiscrete
         self._timeStep = 1. / 240.
         self._urdfRoot = urdfRoot
@@ -59,7 +61,10 @@ class PandaRobotEnv(gym.Env):
         self._improvement_goal_dist = 0.0
         self._improvement_goal_dir = 0.0
 
-        self._distance_measure = distMeasure
+        self._trayUid = None
+        self.blockUid = None
+
+        self._distance_measure_specifications = distMeasures
 
         self._fixed_nr_action_repetitions = fixedActionRepetitions
 
@@ -178,8 +183,7 @@ class PandaRobotEnv(gym.Env):
 
     def obtain_measurements(self):
 
-
-        ## Obtain general measurements:
+        ### Obtain general measurements:
 
         # Obtain robot's joint space positions for all controlled joints in [joint{1}, joint{nr_controlled_joints}]
         self._joint_pos = [j[0] for j in self._p.getJointStates(self._robot, range(self._num_joints))]
@@ -190,21 +194,32 @@ class PandaRobotEnv(gym.Env):
         gripperOrn_eul = self._p.getEulerFromQuaternion(gripperOrn_quat)
 
 
-        ## Obtain performance measurements:
+        ### Obtain performance measurements:
 
-        # Calculate measure of how close the end-effector (=gripper's Center of Mass (COM)) is to the goal location:
-        if self._distance_measure == 0:
+        ## Calculate measure of how close the end-effector (=gripper's Center of Mass (COM)) is to the goal location:
+        if 0 in self._distance_measure_specifications:
             # Euclidean/Cartesian (straight-line) distance calculation from gripper's COM to goal's COM coordinates
             newDistance = distance.euclidean(self._gripper_pos, self._goal_pos)
         else:
             raise NotImplementedError
 
-        # Measure of how precisely end-effector (=gripper's fingers) points towards goal location:
+
+        if 'A' in self._distance_measure_specifications:
+            # Reward reduction of goal distance compared to that of previous time-step
+            self._improvement_goal_dist = self._dist_to_obj - newDistance
+        elif 'B' in self._distance_measure_specifications:
+            # Reward absolute negative distance from gripper to goal
+            self._improvement_goal_dist = -newDistance
+        else:
+            raise NotImplementedError
+
+
+        ## Measure of how precisely end-effector (=gripper's fingers) points towards goal location:
         self._gripper_to_goal_vec = self.get_normalized_vector_from_a_to_b(self._gripper_pos, self._goal_pos)
         self._gripper_orn_vec = self.euler_to_vec_gripper_orientation(gripperOrn_eul)
         self._gripper_orn_vec = self.normalize_vector(self._gripper_orn_vec)
 
-        if self._distance_measure == 0:
+        if 0 in self._distance_measure_specifications:
             # Euclidean distance between vector pointing straight from gripper's COM location towards goal's COM
             # location and vector containing direction of z-axis of coordinate system expressing the orientation of COM
             # of end-effector (expressed with respect to reference frame attached to base of robotic arm).
@@ -213,10 +228,19 @@ class PandaRobotEnv(gym.Env):
         else:
             raise NotImplementedError
 
-        self._improvement_goal_dist = self._dist_to_obj - newDistance
-        self._dist_to_obj = newDistance
 
-        self._improvement_goal_dir = self._dev_from_goal_vec - newDirectionalDeviation
+        if 'A' in self._distance_measure_specifications:
+            # Reward reduction of deviance from gripper's orientation to vector pointing to goal compared to previous
+            # time-step
+            self._improvement_goal_dir = self._dev_from_goal_vec - newDirectionalDeviation
+        elif 'B' in self._distance_measure_specifications:
+            # Reward absolute negative deviation of gripper's orientation from vector pointing towards goal
+            self._improvement_goal_dir = -newDirectionalDeviation
+        else:
+            raise NotImplementedError
+
+
+        self._dist_to_obj = newDistance
         self._dev_from_goal_vec = newDirectionalDeviation
 
     ##############################
@@ -393,7 +417,7 @@ class PandaRobotEnv(gym.Env):
             print('Current step-ctr: ' + str(self._envStepCounter))
             print('Cart dist: ' + str(self._dist_to_obj))
             print('Dir. devi: ' + str(self._dev_from_goal_vec))
-            time.sleep(5)
+            time.sleep(1.5)
 
         elif self._envStepCounter > self._maxSteps:
             # Goal not reached punishment
