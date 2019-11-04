@@ -1,4 +1,4 @@
-import os
+import os, sys
 import gym
 import tensorflow as tf
 from stable_baselines import PPO2
@@ -21,33 +21,48 @@ MODEL_ID = ENV_NAME + TIME_STAMP
 PATH = "Results/" + ALGO + "/" + MODEL_ID + "/"
 SUFFIX = "final_model"
 SAVE_MODEL_DESTINATION = PATH + SUFFIX
+TENSORBOARD_LOCATION = PATH + "tensorboard/"
 
-# Create and vectorize Environment
-env = PandaRobotEnv(renders=True, fixedActionRepetitions=True)
-env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
-# Create custom NN architecture
-policy_kwargs = dict(act_fun=tf.nn.tanh, net_arch=[150, 150])
+# TODO: create dictionary of parameters that can be printed to file in one go
 
-# Create the PPO agent
-model = PPO2("MlpPolicy", env,
-             policy_kwargs=policy_kwargs,
-             verbose=1,
-             learning_rate=5e-4,
-             tensorboard_log=str("/tmp/"+TIME_STAMP+"ppo2/"))
+if __name__ == '__main__':
 
-# Specify additional parameters for callback-method
-model.check_point_location = PATH
-model.update_frequency = UPDATE_FREQUENCY
+    if not os.path.exists(TENSORBOARD_LOCATION):
+        os.makedirs(TENSORBOARD_LOCATION)
 
-# Retrieve the environment
-env = model.get_env()
+    # Create and vectorize Environment
+    env = PandaRobotEnv(renders=True, fixedActionRepetitions=True)
+    env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
-# Train the agent
-model.learn(total_timesteps=200000, callback=callback)
+    # Create custom NN architecture
+    policy_kwargs = dict(act_fun=tf.nn.tanh, net_arch=[150, 150])
 
-# Save the agent
-if not os.path.exists(PATH):
-    os.makedirs(PATH)
-model.save(SAVE_MODEL_DESTINATION)
+    if len(sys.argv) > 1:
+        # Reload model for continuing training
+        path = sys.argv[1]
+        model = PPO2.load(path)
+        model.env = env
+    else:
+        # Create the PPO agent
+        model = PPO2("MlpPolicy", env,
+                     policy_kwargs=policy_kwargs,
+                     verbose=1,
+                     learning_rate=5e-4,
+                     tensorboard_log=str(TENSORBOARD_LOCATION))
+
+    # Specify additional parameters for callback-method
+    model.check_point_location = PATH
+    model.update_frequency = UPDATE_FREQUENCY
+
+    # Retrieve the environment
+    env = model.get_env()
+
+    # Train the agent
+    model.learn(total_timesteps=200000, callback=callback)
+
+    # Save the agent
+    if not os.path.exists(PATH):
+        os.makedirs(PATH)
+    model.save(SAVE_MODEL_DESTINATION)
 
