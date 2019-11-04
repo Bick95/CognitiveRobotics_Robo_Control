@@ -47,6 +47,7 @@ class CustomRobotEnv(gym.Env):
         self._cam_yaw = 180
         self._cam_pitch = -40
         self._last_dist_to_obj = 0.0
+        self._last_dev_from_goal_vec = 0.0
 
         self._p = p
         #self._robo_path = 'RobotModels/Panda/deps/Panda/panda.urdf'
@@ -67,7 +68,6 @@ class CustomRobotEnv(gym.Env):
         self._gripperIndex = 9  #self._p.getNumJoints(self._robot)
         #print('Num joints: ' + str(self._num_joints))
         #print('Gripper idx: ' + str(self._gripperIndex))
-        #time.sleep(5)
         self.reset()
 
         # CHECK FOR JOINT NAMES AND THEIR ASSOCIATED INDICES
@@ -140,29 +140,9 @@ class CustomRobotEnv(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    '''
-    def _euler_to_positional_vector(self, euler):
-        yaw, pitch, roll = euler[0], euler[1], euler[2]
-        x = math.cos(yaw) * math.cos(pitch)
-        y = math.sin(yaw) * math.cos(pitch)
-        z = math.sin(pitch)
-        return [x, y, z]
-
-    def get_directional_vector(self, orientation):
-        if len(orientation) == 3:
-            # Is Euler representation
-            return self._euler_to_positional_vector(orientation)
-
-        # Else: Is Quaternion representation
-        return self._euler_to_positional_vector(self._p.getEulerFromQuaternion(orientation))
-
-    def normalize_vector(self, vec):
-        len_of_vec = 0
-        for i in range(len(vec)):
-            len_of_vec += abs(vec[i])
-        for i in range(len(vec)):
-            vec[i] /= len_of_vec
-        return vec
+    ##################################
+    # Further added helper functions #
+    ##################################
 
     def get_normalized_vector_from_a_to_b(self, a, b):
         vec = []
@@ -175,12 +155,42 @@ class CustomRobotEnv(gym.Env):
             vec[i] /= len_of_vec
         return vec
 
-    def vector_difference(self, a, b):
-        diff = 0
-        for i in range(len(a)):
-            diff += abs(a[i] - b[i])
-        return diff
-    '''
+    def euler_to_gripper_orientation(self, yaw, pitch=None, roll=None):
+        """
+           Returns the orientation of the z-axis of the gripper with respect to the world/universe-reference
+           coordinate system. The z-axis of the gripper is the one pointing along the direction of the fingers
+           of the gripper.
+        """
+        if isinstance(yaw, tuple):
+            yaw = list(yaw)
+        if isinstance(yaw, list):
+            # list of angles is provided
+            pitch, roll, yaw = yaw[1], yaw[2], yaw[0]
+
+        # Construct rotation matrices
+        sin = math.sin
+        cos = math.cos
+        Rx_yaw = np.array([[1, 0, 0], [0, cos(yaw), -sin(yaw)], [0, sin(yaw), cos(yaw)]])
+        Rz_rol = np.array([[cos(roll), -sin(roll), 0], [sin(roll), cos(roll), 0], [0, 0, 1]])
+        Ry_pit = np.array([[cos(pitch), 0, sin(pitch)], [0, 1, 0], [-sin(pitch), 0, cos(pitch)]])
+
+        # Rotate a coord system initially coincident with ref frame in exact same way as roll/pitch/yaw are applied in
+        # simulation. To get the orientation of the axes defining the coord system attached to COM (=Center of mass) of
+        # end-effector (=gripper) expressed with respect to ref system.
+        R = Rz_rol.dot(Ry_pit.dot(Rx_yaw))
+
+        ee_z_axis = R[:, 2]  # Direction of z-axis of coord system expressing gripper orientation wrt reference frame
+
+        return ee_z_axis
+
+    def normalize_vector(self, vec):
+        len_of_vec = 0
+        for i in range(len(vec)):
+            len_of_vec += abs(vec[i])
+        for i in range(len(vec)):
+            vec[i] /= len_of_vec
+        return vec
+
 
     def getExtendedObservation(self):
 
@@ -193,6 +203,8 @@ class CustomRobotEnv(gym.Env):
         world_position, world_ori_quat = self._p.getLinkState(self._robot, self._gripperIndex)[0:2]
         # world_ori_vec = self.get_directional_vector(world_ori_quat)
         cartePos = world_position[:3]
+
+
 
         # Block's Cartesian position
         blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
@@ -279,30 +291,24 @@ class CustomRobotEnv(gym.Env):
             self._observation = self.getExtendedObservation()
             return True
 
-        blockPos, blockOrn_quat = p.getBasePositionAndOrientation(self.blockUid)
+        # Obtain measurements
+        blockPos, _ = p.getBasePositionAndOrientation(self.blockUid)
         gripperPos, gripperOrn_quat = p.getLinkState(self._robot, self._gripperIndex)[0:2]
+        gripperOrn_euler = self._p.getEulerFromQuaternion(gripperOrn_quat)
 
-        # Implements analogous to: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
+        # Cartesian distance calculation from gripper to goal:
         cartDistance = distance.euclidean(blockPos, gripperPos)
 
-        '''
-        # Punish if the end-effector is not pointing towards target
-        goal_direction_vec = self.get_normalized_vector_from_a_to_b(gripperPos, blockPos)
-        gripperOrn_vec = self.get_directional_vector(gripperOrn_quat)
+        # Directional vector deviation calculation
+        # (Deviation of direction of z-axis of gripper from normalized directional vector from gripper towards goal)
+        gripperToGoal_vec = self.get_normalized_vector_from_a_to_b(gripperPos, blockPos)
+        gripperOrn_vec = self.euler_to_gripper_orientation(gripperOrn_euler)
         gripperOrn_vec = self.normalize_vector(gripperOrn_vec)
-        directional_diff = self.vector_difference(goal_direction_vec, gripperOrn_vec)
+        directionalDeviation = distance.euclidean(gripperToGoal_vec, gripperOrn_vec)
 
-        print('Directional difference: ### ' + str(directional_diff) + ' ###')
-        print(gripperOrn_vec)
-        
-        maxDist = 0.4
-        if cartDistance < maxDist and directional_diff < 0.25:
-            self.terminated = 1
-            self._observation = self.getExtendedObservation()
-            return True
-            '''
-        maxDist = 0.25
-        if cartDistance < maxDist:
+
+        maxDist, maxDeviation = 0.25, 0.25
+        if cartDistance < maxDist and directionalDeviation < maxDeviation:
             self.terminated = 1
             self._observation = self.getExtendedObservation()
             return True
@@ -311,58 +317,52 @@ class CustomRobotEnv(gym.Env):
 
     def _reward(self):
 
-        blockPos, blockOrn_quat = p.getBasePositionAndOrientation(self.blockUid)
+        # Obtain measurements
+        blockPos, _ = p.getBasePositionAndOrientation(self.blockUid)
         gripperPos, gripperOrn_quat = p.getLinkState(self._robot, self._gripperIndex)[0:2]
+        gripperOrn_euler = self._p.getEulerFromQuaternion(gripperOrn_quat)
 
-        # Implements analogous to: numpy.sqrt(numpy.sum((numpy.array(a)-numpy.array(b))**2))
+        # Cartesian distance calculation from gripper to goal:
         cartDistance = distance.euclidean(blockPos, gripperPos)
 
-        '''
-        # Punish if the end-effector is not pointing towards target
-        goal_direction_vec = self.get_normalized_vector_from_a_to_b(gripperPos, blockPos)
-        gripperOrn_vec = self.get_directional_vector(gripperOrn_quat)
+        # Directional vector deviation calculation
+        # (Deviation of direction of z-axis of gripper from normalized directional vector from gripper towards goal)
+        gripperToGoal_vec = self.get_normalized_vector_from_a_to_b(gripperPos, blockPos)
+        gripperOrn_vec = self.euler_to_gripper_orientation(gripperOrn_euler)
         gripperOrn_vec = self.normalize_vector(gripperOrn_vec)
-        directional_diff = self.vector_difference(goal_direction_vec, gripperOrn_vec)
+        directionalDeviation = distance.euclidean(gripperToGoal_vec, gripperOrn_vec)
 
-        print('Directional difference\t: ' + str(directional_diff))
-        print('Gripper orientation:', end='\t'),
-        print(gripperOrn_vec)
+        # Reward computation:
+        reward = 0
 
-        #distChange = self._last_dist_to_obj - cartDistance
-        #self._last_dist_to_obj = cartDistance
-        #reward += -cartDistance/10 + distChange
-        
-        maxDist = 0.4
-
-        reward = - cartDistance if cartDistance > maxDist else 0.0
-        reward += (-directional_diff)
-
-        if cartDistance < maxDist and directional_diff < 0.25:
-            print('Cart dist: ' + str(cartDistance))
-            # According to provided implementation: Gripper has reached target!
-            goalReward = 1
-            timeReward = 200/self._envStepCounter  # if done after 200 time steps, then +1
-            reward += (goalReward + timeReward)
-            print("#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
-            time.sleep(5)
-        elif self._envStepCounter > self._maxSteps:
-            reward -= 2
-        '''
-
+        # Distance reward
         maxDist = 0.25
-
-        reward = self._last_dist_to_obj - cartDistance
+        if cartDistance > maxDist:
+            # Only when being too distant from goal, distance needs adjustment
+            reward += self._last_dist_to_obj - cartDistance
         self._last_dist_to_obj = cartDistance
 
-        if cartDistance < maxDist:
+        # Orientation reward
+        maxDeviation = 0.25
+        if directionalDeviation > maxDeviation:
+            # Only when being too far from desired orientation, orientation needs adjustment
+            reward += self._last_dev_from_goal_vec - directionalDeviation
+        self._last_dev_from_goal_vec = directionalDeviation
+
+        # Terminal state rewards
+        if cartDistance < maxDist and directionalDeviation < maxDeviation:
+            # Goal reached reward
             print('Cart dist: ' + str(cartDistance))
-            goalReward = 1
+            print('Dir. devi: ' + str(directionalDeviation))
+            goalReward = 2
             timeReward = 200 / self._envStepCounter  # if done after 200 time steps, then +1
             reward += (goalReward + timeReward)
             print(
                 "#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
+            print('Current step-ctr: ' + str(self._envStepCounter))
             time.sleep(5)
         elif self._envStepCounter > self._maxSteps:
+            # Goal not reached punishment
             reward -= 2
 
         print('Current step-ctr: ' + str(self._envStepCounter))
