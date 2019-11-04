@@ -64,7 +64,7 @@ class CustomRobotEnv(gym.Env):
         self.seed()
         self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
                                  useFixedBase=1)
-        self._num_joints = 7  # nr of controlled joints
+        self._num_joints = 7    # nr of controlled joints
         self._gripperIndex = 9  #self._p.getNumJoints(self._robot)
         #print('Num joints: ' + str(self._num_joints))
         #print('Gripper idx: ' + str(self._gripperIndex))
@@ -191,8 +191,13 @@ class CustomRobotEnv(gym.Env):
             vec[i] /= len_of_vec
         return vec
 
+    ##############################
+    # End added helper functions #
+    ##############################
 
     def getExtendedObservation(self):
+
+        # TODO: introduce standard for variable names! Refactor code...
 
         self._observation = []
 
@@ -201,18 +206,25 @@ class CustomRobotEnv(gym.Env):
 
         # Robot's Cartesian end-effector pos
         world_position, world_ori_quat = self._p.getLinkState(self._robot, self._gripperIndex)[0:2]
-        # world_ori_vec = self.get_directional_vector(world_ori_quat)
         cartePos = world_position[:3]
-
-
+        gripperOrn_euler = self._p.getEulerFromQuaternion(world_ori_quat)
 
         # Block's Cartesian position
-        blockPos, blockOrn = p.getBasePositionAndOrientation(self.blockUid)
+        blockPos, _ = p.getBasePositionAndOrientation(self.blockUid)
 
-        self._observation.extend(blockPos)          # Cartesian position of goal
-        self._observation.extend(cartePos)          # Cartesian position of end-effector
-        # self._observation.extend(world_ori_vec)     # Orientation of end-effector in vector form; in (x, y, z)-direction
-        self._observation.extend(jointPos)          # Joint angles
+        # Robot's gripper's orientation expressed in directional vector
+        gripperOrn_vec = self.euler_to_gripper_orientation(gripperOrn_euler)
+        gripperOrn_vec = self.normalize_vector(gripperOrn_vec)
+
+        # Direction from gripper to goal
+        gripper_to_goal_vec = self.get_normalized_vector_from_a_to_b(cartePos, blockPos)
+
+        # Construct observation
+        self._observation.extend(blockPos)              # Cartesian position of goal
+        self._observation.extend(cartePos)              # Cartesian position of end-effector
+        self._observation.extend(gripper_to_goal_vec)   # Normalized vector from gripper to goal
+        self._observation.extend(gripperOrn_vec)        # Orientation of gripper's z-axis wrt reference frame
+        self._observation.extend(jointPos)              # Joint angles
 
         return self._observation
 
@@ -221,9 +233,6 @@ class CustomRobotEnv(gym.Env):
         repetitions = 5
         print('Actions: ', end='\t\t')
         print(action)
-        #print('Actions clipped: ', end='\t')
-        #action = np.clip(action, -0.005, 0.005)
-        #print(action)
         print('Repetitions: ', end='\t')
         print(repetitions)
 
@@ -238,7 +247,6 @@ class CustomRobotEnv(gym.Env):
                                           forces=[50]*self._num_joints)
 
         for i in range(repetitions):  # self._actionRepeat
-            print('------------------######################---------------------')
 
             p.stepSimulation()
 
