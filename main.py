@@ -26,6 +26,8 @@ TENSORBOARD_LOCATION = PATH + "tensorboard/"
 
 # TODO: create dictionary of parameters that can be printed to file in one go
 
+
+
 if __name__ == '__main__':
 
     if not os.path.exists(TENSORBOARD_LOCATION):
