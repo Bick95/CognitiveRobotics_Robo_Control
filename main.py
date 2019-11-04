@@ -30,7 +30,7 @@ model = PPO2("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1, learning_
 env = model.get_env()
 
 # Train the agent
-model.learn(total_timesteps=100000)
+model.learn(total_timesteps=200000)
 
 # Save the agent
 if not os.path.exists(PATH):

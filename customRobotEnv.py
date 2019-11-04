@@ -31,7 +31,8 @@ class PandaRobotEnv(gym.Env):
                  renders=False,
                  isDiscrete=False,
                  maxSteps=1000,
-                 fixedActionRepetitions=False):
+                 fixedActionRepetitions=False,
+                 distMeasure=0):
 
         self._isDiscrete = isDiscrete
         self._timeStep = 1. / 240.
@@ -57,6 +58,8 @@ class PandaRobotEnv(gym.Env):
         self._dev_from_goal_vec = 0.0
         self._improvement_goal_dist = 0.0
         self._improvement_goal_dir = 0.0
+
+        self._distance_measure = distMeasure
 
         self._fixed_nr_action_repetitions = fixedActionRepetitions
 
@@ -190,21 +193,28 @@ class PandaRobotEnv(gym.Env):
         ## Obtain performance measurements:
 
         # Calculate measure of how close the end-effector (=gripper's Center of Mass (COM)) is to the goal location:
-        # Euclidean/Cartesian (straight-line) distance calculation from gripper's COM to goal's COM coordinates
-        newEuclDistance = distance.euclidean(self._gripper_pos, self._goal_pos)
+        if self._distance_measure == 0:
+            # Euclidean/Cartesian (straight-line) distance calculation from gripper's COM to goal's COM coordinates
+            newDistance = distance.euclidean(self._gripper_pos, self._goal_pos)
+        else:
+            raise NotImplementedError
 
         # Measure of how precisely end-effector (=gripper's fingers) points towards goal location:
-        # Euclidean distance between vector pointing straight from gripper's COM location towards goal's COM location
-        # and vector containing direction of z-axis of coordinate system expressing the orientation of COM of
-        # end-effector (expressed with respect to reference frame attached to base of robotic arm).
-        # (Z-axis of end-effector frame points from end-effector's COM towards its fingers.)
         self._gripper_to_goal_vec = self.get_normalized_vector_from_a_to_b(self._gripper_pos, self._goal_pos)
         self._gripper_orn_vec = self.euler_to_vec_gripper_orientation(gripperOrn_eul)
         self._gripper_orn_vec = self.normalize_vector(self._gripper_orn_vec)
-        newDirectionalDeviation = distance.euclidean(self._gripper_to_goal_vec, self._gripper_orn_vec)
 
-        self._improvement_goal_dist = self._dist_to_obj - newEuclDistance
-        self._dist_to_obj = newEuclDistance
+        if self._distance_measure == 0:
+            # Euclidean distance between vector pointing straight from gripper's COM location towards goal's COM
+            # location and vector containing direction of z-axis of coordinate system expressing the orientation of COM
+            # of end-effector (expressed with respect to reference frame attached to base of robotic arm).
+            # (Z-axis of end-effector frame points from end-effector's COM towards its fingers.)
+            newDirectionalDeviation = distance.euclidean(self._gripper_to_goal_vec, self._gripper_orn_vec)
+        else:
+            raise NotImplementedError
+
+        self._improvement_goal_dist = self._dist_to_obj - newDistance
+        self._dist_to_obj = newDistance
 
         self._improvement_goal_dir = self._dev_from_goal_vec - newDirectionalDeviation
         self._dev_from_goal_vec = newDirectionalDeviation
