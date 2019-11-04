@@ -1,21 +1,30 @@
+import os
 import gym
 import tensorflow as tf
 from stable_baselines import PPO2
-from customRobotEnv import CustomRobotEnv
+from customRobotEnv import PandaRobotEnv
 from stable_baselines.common.vec_env import DummyVecEnv
+from datetime import datetime
 
+now = datetime.now()
+
+RENDER = True
+FIXED_NUM_REPETITIONS = True
+
+PATH = "Results/"
+ENV_NAME = "ppo2-" + "PandaRobotEnv"
+TIME_STAMP = now.strftime("%m_%d_%Y__%H_%M_%S__%f")
+SAVE_MODEL_DESTINATION = PATH + ENV_NAME + TIME_STAMP
 
 # Create and vectorize Environment
-env_name = "CustomRobotEnv"
-env = eval(env_name + '(renders=True)')  # <-- Allows for making the Env-name variable: returns: KukaGymEnv(renders=True) (as used in line below)
-#env = KukaGymEnv(renders=True)          # was initially: env = gym.make('CartPole-v1')
-env = DummyVecEnv([lambda: env])         # The algorithms require a vectorized environment to run, hence vectorize
+env = PandaRobotEnv(renders=True, fixedActionRepetitions=True)
+env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
 # Create custom NN architecture
 policy_kwargs = dict(act_fun=tf.nn.tanh, net_arch=[150, 150])
 
 # Create the PPO agent
-model = PPO2("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1, learning_rate=5e-4)  # env was before string: "CartPole-v1"
+model = PPO2("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1, learning_rate=5e-4)
 
 # Retrieve the environment
 env = model.get_env()
@@ -24,17 +33,7 @@ env = model.get_env()
 model.learn(total_timesteps=100000)
 
 # Save the agent
-model.save("ppo2-" + env_name)
+if not os.path.exists(PATH):
+    os.makedirs(PATH)
+model.save(SAVE_MODEL_DESTINATION)
 
-# Show 1000 test iterations to user after training is done
-obs = env.reset()
-for i in range(1000):
-    action, _states = model.predict(obs)
-    obs, rewards, dones, info = env.step(action)
-    env.render()
-
-# Demonstrate deletion of model
-del model
-
-# Demonstrating loading of model
-model = PPO2.load("ppo2-" + env_name)

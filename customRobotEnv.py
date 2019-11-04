@@ -1,5 +1,4 @@
-import os, inspect, random, sys
-
+import os, inspect
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 print("current_dir=" + currentdir)
@@ -12,7 +11,6 @@ from gym.utils import seeding
 import numpy as np
 import time
 import pybullet as p
-from pybullet_envs.bullet import kuka
 import random
 import pybullet_data
 from pkg_resources import parse_version
@@ -23,16 +21,18 @@ largeValObservation = 100
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
-class CustomRobotEnv(gym.Env):
+class PandaRobotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
                  urdfRoot=pybullet_data.getDataPath(),
-                 actionRepeat=1,
+                 actionRepeat=5,
                  isEnableSelfCollision=True,
                  renders=False,
                  isDiscrete=False,
-                 maxSteps=1000):
+                 maxSteps=1000,
+                 fixedActionRepetitions=False):
+
         self._isDiscrete = isDiscrete
         self._timeStep = 1. / 240.
         self._urdfRoot = urdfRoot
@@ -40,14 +40,25 @@ class CustomRobotEnv(gym.Env):
         self._isEnableSelfCollision = isEnableSelfCollision
         self._observation = []
         self._envStepCounter = 0
+
         self._renders = renders
         self._maxSteps = maxSteps
         self.terminated = 0
         self._cam_dist = 1.3
         self._cam_yaw = 180
         self._cam_pitch = -40
-        self._last_dist_to_obj = 0.0
-        self._last_dev_from_goal_vec = 0.0
+
+        self._joint_pos = []
+        self._goal_pos = []
+        self._gripper_pos = []
+        self._gripper_orn_vec = []
+        self._gripper_to_goal_vec = []
+        self._dist_to_obj = 0.0
+        self._dev_from_goal_vec = 0.0
+        self._improvement_goal_dist = 0.0
+        self._improvement_goal_dir = 0.0
+
+        self._fixed_nr_action_repetitions = fixedActionRepetitions
 
         self._p = p
         #self._robo_path = 'RobotModels/Panda/deps/Panda/panda.urdf'
@@ -64,85 +75,56 @@ class CustomRobotEnv(gym.Env):
         self.seed()
         self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
                                  useFixedBase=1)
-        self._num_joints = 7    # nr of controlled joints
-        self._gripperIndex = 9  #self._p.getNumJoints(self._robot)
-        #print('Num joints: ' + str(self._num_joints))
-        #print('Gripper idx: ' + str(self._gripperIndex))
+        self._num_joints = 7    # Nr of controlled joints
+        self._gripperIndex = 9  # Index of end-effector-link for Franka Emika Panda
         self.reset()
-
-        # CHECK FOR JOINT NAMES AND THEIR ASSOCIATED INDICES
-        #_link_name_to_index = {p.getBodyInfo(self._robot)[0].decode('UTF-8'): -1, }
-        #for _id in range(p.getNumJoints(self._robot)):
-        #    _name = p.getJointInfo(self._robot, _id)[12].decode('UTF-8')
-        #    _link_name_to_index[_name] = _id
-        #print(_link_name_to_index)
-        #time.sleep(100)
 
         observationDim = len(self.getExtendedObservation())
 
         observation_high = np.array([largeValObservation] * observationDim)
+
+        # Network may have to predict number of repetitions how many times a joint config is to be applied in a row by
+        # means of an additional action node:
+        additional_action_node = 0 if self._fixed_nr_action_repetitions else 1
+
         if self._isDiscrete:
-            self.action_space = spaces.Discrete(3+1)
+            self.action_space = spaces.Discrete(3+additional_action_node)
         else:
-            action_dim = self._num_joints+1
+            action_dim = self._num_joints+additional_action_node
             self._action_bound = 1
             action_high = np.array([self._action_bound] * action_dim)
             self.action_space = spaces.Box(-action_high, action_high)
         self.observation_space = spaces.Box(-observation_high, observation_high)
         self.viewer = None
 
+    ##################################
+    # Further added helper functions #
+    ##################################
+
     def get_random_joint_config(self, nr_joints=None):
+        """
+        Returns a random joint angle in range [-1,1] in radians. One random angle is generated for each controlled joint
+        from joint 1 through nr_joints, where nr_joints is the number of joints for which a random config has to be
+        returned.
+
+        :param nr_joints: Random joint angles are generated for joints 1 through nr_joints. Optional.
+        :return: List of joint angles. One random joint angle in radians per requested joint
+        """
         if nr_joints is None:
             nr_joints = self._num_joints
         return [random.uniform(-1, 1) for _ in range(nr_joints)]
 
-    def apply_actions(self, config):
-        for i in range(self._num_joints):
+    def apply_joint_config(self, config):
+        """
+        Instantaneously apply a given joint configuration to a robotic arm.
+
+        :param config: list of joint angles to be applied to joints 1 through n, respectively;
+                       n=number of joint angles provided
+        :return: -
+        """
+        for i in range(len(config)):
             self._p.resetJointState(self._robot, i, config[i])
-        time.sleep(1)
-
-    def reset(self):
-        self.terminated = 0
-        p.resetSimulation()
-        p.setPhysicsEngineParameter(numSolverIterations=150)
-        p.setTimeStep(self._timeStep)
-        p.loadURDF(os.path.join(self._urdfRoot, "plane.urdf"), [0, 0, -1])
-
-        p.loadURDF(os.path.join(self._urdfRoot, "table/table.urdf"), 0.5000000, 0.00000, -.820000,
-                   0.000000, 0.000000, 0.0, 1.0)
-
-        self._trayUid = p.loadURDF(os.path.join(self._urdfRoot, "tray/tray.urdf"), 0.640000,
-                                   0.075000, -0.190000, 0.000000, 0.000000, 1.000000, 0.000000)
-
-        xpos = 0.55 + 0.12 * random.random()
-        ypos = 0 + 0.2 * random.random()
-        ang = 3.14 * 0.5 + 3.1415925438 * random.random()
-        orn = p.getQuaternionFromEuler([0, 0, ang])
-        self.blockUid = p.loadURDF(os.path.join(self._urdfRoot, "block.urdf"), xpos, ypos, -0.15,
-                                   orn[0], orn[1], orn[2], orn[3])
-
-        p.setGravity(0, 0, -10)
-        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
-                                 useFixedBase=1)
-        self._envStepCounter = 0
-
-        self.apply_actions(self.get_random_joint_config())
-
-        p.stepSimulation()
-        self._observation = self.getExtendedObservation()
-
-        return np.array(self._observation)
-
-    def __del__(self):
-        p.disconnect()
-
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
-
-    ##################################
-    # Further added helper functions #
-    ##################################
+        # time.sleep(1)  # Observe pose
 
     def get_normalized_vector_from_a_to_b(self, a, b):
         vec = []
@@ -155,7 +137,7 @@ class CustomRobotEnv(gym.Env):
             vec[i] /= len_of_vec
         return vec
 
-    def euler_to_gripper_orientation(self, yaw, pitch=None, roll=None):
+    def euler_to_vec_gripper_orientation(self, yaw, pitch=None, roll=None):
         """
            Returns the orientation of the z-axis of the gripper with respect to the world/universe-reference
            coordinate system. The z-axis of the gripper is the one pointing along the direction of the fingers
@@ -164,7 +146,7 @@ class CustomRobotEnv(gym.Env):
         if isinstance(yaw, tuple):
             yaw = list(yaw)
         if isinstance(yaw, list):
-            # list of angles is provided
+            # list of angles is provided in yaw-variable
             pitch, roll, yaw = yaw[1], yaw[2], yaw[0]
 
         # Construct rotation matrices
@@ -191,66 +173,129 @@ class CustomRobotEnv(gym.Env):
             vec[i] /= len_of_vec
         return vec
 
+    def obtain_measurements(self):
+
+
+        ## Obtain general measurements:
+
+        # Obtain robot's joint space positions for all controlled joints in [joint{1}, joint{nr_controlled_joints}]
+        self._joint_pos = [j[0] for j in self._p.getJointStates(self._robot, range(self._num_joints))]
+
+        # Obtain world information
+        self._goal_pos, _ = p.getBasePositionAndOrientation(self.blockUid)
+        self._gripper_pos, gripperOrn_quat = p.getLinkState(self._robot, self._gripperIndex)[0:2]
+        gripperOrn_eul = self._p.getEulerFromQuaternion(gripperOrn_quat)
+
+
+        ## Obtain performance measurements:
+
+        # Calculate measure of how close the end-effector (=gripper's Center of Mass (COM)) is to the goal location:
+        # Euclidean/Cartesian (straight-line) distance calculation from gripper's COM to goal's COM coordinates
+        newEuclDistance = distance.euclidean(self._gripper_pos, self._goal_pos)
+
+        # Measure of how precisely end-effector (=gripper's fingers) points towards goal location:
+        # Euclidean distance between vector pointing straight from gripper's COM location towards goal's COM location
+        # and vector containing direction of z-axis of coordinate system expressing the orientation of COM of
+        # end-effector (expressed with respect to reference frame attached to base of robotic arm).
+        # (Z-axis of end-effector frame points from end-effector's COM towards its fingers.)
+        self._gripper_to_goal_vec = self.get_normalized_vector_from_a_to_b(self._gripper_pos, self._goal_pos)
+        self._gripper_orn_vec = self.euler_to_vec_gripper_orientation(gripperOrn_eul)
+        self._gripper_orn_vec = self.normalize_vector(self._gripper_orn_vec)
+        newDirectionalDeviation = distance.euclidean(self._gripper_to_goal_vec, self._gripper_orn_vec)
+
+        self._improvement_goal_dist = self._dist_to_obj - newEuclDistance
+        self._dist_to_obj = newEuclDistance
+
+        self._improvement_goal_dir = self._dev_from_goal_vec - newDirectionalDeviation
+        self._dev_from_goal_vec = newDirectionalDeviation
+
     ##############################
     # End added helper functions #
     ##############################
 
+
+    def reset(self):
+        self.terminated = 0
+        p.resetSimulation()
+        p.setPhysicsEngineParameter(numSolverIterations=150)
+        p.setTimeStep(self._timeStep)
+        p.loadURDF(os.path.join(self._urdfRoot, "plane.urdf"), [0, 0, -1])
+
+        p.loadURDF(os.path.join(self._urdfRoot, "table/table.urdf"), 0.5000000, 0.00000, -.820000,
+                   0.000000, 0.000000, 0.0, 1.0)
+
+        self._trayUid = p.loadURDF(os.path.join(self._urdfRoot, "tray/tray.urdf"), 0.640000,
+                                   0.075000, -0.190000, 0.000000, 0.000000, 1.000000, 0.000000)
+
+        xpos = 0.55 + 0.12 * random.random()
+        ypos = 0 + 0.2 * random.random()
+        ang = 3.14 * 0.5 + 3.1415925438 * random.random()
+        orn = p.getQuaternionFromEuler([0, 0, ang])
+        self.blockUid = p.loadURDF(os.path.join(self._urdfRoot, "block.urdf"), xpos, ypos, -0.15,
+                                   orn[0], orn[1], orn[2], orn[3])
+
+        p.setGravity(0, 0, -10)
+        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
+                                 useFixedBase=1)
+        self._envStepCounter = 0
+
+        # Set robotic arm to random initial pose
+        self.apply_joint_config(self.get_random_joint_config())
+
+        p.stepSimulation()
+        self.obtain_measurements()
+        self._observation = self.getExtendedObservation()
+
+        return np.array(self._observation)
+
+    def __del__(self):
+        p.disconnect()
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
     def getExtendedObservation(self):
-
-        # TODO: introduce standard for variable names! Refactor code...
-
+        """
+        Construct an observation that serves as input to the reinforcement learning agent.
+        :return: Representation of state of robotic arm and its surrounding
+        """
         self._observation = []
-
-        # Robot's joint space pos
-        jointPos = [j[0] for j in self._p.getJointStates(self._robot, range(self._num_joints))]
-
-        # Robot's Cartesian end-effector pos
-        world_position, world_ori_quat = self._p.getLinkState(self._robot, self._gripperIndex)[0:2]
-        cartePos = world_position[:3]
-        gripperOrn_euler = self._p.getEulerFromQuaternion(world_ori_quat)
-
-        # Block's Cartesian position
-        blockPos, _ = p.getBasePositionAndOrientation(self.blockUid)
-
-        # Robot's gripper's orientation expressed in directional vector
-        gripperOrn_vec = self.euler_to_gripper_orientation(gripperOrn_euler)
-        gripperOrn_vec = self.normalize_vector(gripperOrn_vec)
-
-        # Direction from gripper to goal
-        gripper_to_goal_vec = self.get_normalized_vector_from_a_to_b(cartePos, blockPos)
-
-        # Construct observation
-        self._observation.extend(blockPos)              # Cartesian position of goal
-        self._observation.extend(cartePos)              # Cartesian position of end-effector
-        self._observation.extend(gripper_to_goal_vec)   # Normalized vector from gripper to goal
-        self._observation.extend(gripperOrn_vec)        # Orientation of gripper's z-axis wrt reference frame
-        self._observation.extend(jointPos)              # Joint angles
+        self._observation.extend(self._goal_pos)               # Cartesian position of goal
+        self._observation.extend(self._gripper_pos)            # Cartesian position of end-effector
+        self._observation.extend(self._gripper_to_goal_vec)    # Normalized vector from gripper to goal
+        self._observation.extend(self._gripper_orn_vec)        # Orientation of gripper's z-axis wrt reference frame
+        self._observation.extend(self._joint_pos)              # Joint angles
 
         return self._observation
 
     def step(self, action):
-        # TODO: dis-/enable again?
-        minRep, maxRep = 1, 10
-        repetitions = min(maxRep, max(minRep, int(abs(action[-1]*10))))
-        # repetitions = 5
-        print('Actions: ', end='\t\t')
-        print(action)
-        print('Repetitions: ', end='\t')
-        print(repetitions)
 
-        jointPos = [state[0] for state in self._p.getJointStates(self._robot, range(self._num_joints))]
+        # Determine how many times in a row commanded actions are supposed to be executed. Min=1, Max=10 times.
+        if self._fixed_nr_action_repetitions:
+            repetitions = self._actionRepeat
+        else:
+            minRep, maxRep = 1, 10
+            repetitions = min(maxRep, max(minRep, int(abs(action[-1]*10))))
+
+        # Get joint angles for all controlled joints
+        jointPos = self._joint_pos.copy()
+
+        # Determine new joint configurations. Clip actions and increment current joint angles by clipped action commands
         jointPos = [jointPos[i] + np.clip(action[i], -0.5, 0.5) for i in range(self._num_joints)]
 
-
+        # Set new, desired joint configurations
         self._p.setJointMotorControlArray(bodyUniqueId=self._robot,
                                           jointIndices=range(self._num_joints),
                                           controlMode=self._p.POSITION_CONTROL,
                                           targetPositions=jointPos,
                                           forces=[50]*self._num_joints)
 
-        for i in range(repetitions):  # self._actionRepeat
+        # Step a simulations given number of times to get old joint configurations closer to the new, desired ones
+        for i in range(repetitions):
 
             p.stepSimulation()
+            self.obtain_measurements()
 
             if self._termination:
                 break
@@ -258,6 +303,7 @@ class CustomRobotEnv(gym.Env):
 
         if self._renders:
             time.sleep(self._timeStep)
+
         self._observation = self.getExtendedObservation()
 
         done = self._termination
@@ -301,24 +347,8 @@ class CustomRobotEnv(gym.Env):
             self._observation = self.getExtendedObservation()
             return True
 
-        # Obtain measurements
-        blockPos, _ = p.getBasePositionAndOrientation(self.blockUid)
-        gripperPos, gripperOrn_quat = p.getLinkState(self._robot, self._gripperIndex)[0:2]
-        gripperOrn_euler = self._p.getEulerFromQuaternion(gripperOrn_quat)
-
-        # Cartesian distance calculation from gripper to goal:
-        cartDistance = distance.euclidean(blockPos, gripperPos)
-
-        # Directional vector deviation calculation
-        # (Deviation of direction of z-axis of gripper from normalized directional vector from gripper towards goal)
-        gripperToGoal_vec = self.get_normalized_vector_from_a_to_b(gripperPos, blockPos)
-        gripperOrn_vec = self.euler_to_gripper_orientation(gripperOrn_euler)
-        gripperOrn_vec = self.normalize_vector(gripperOrn_vec)
-        directionalDeviation = distance.euclidean(gripperToGoal_vec, gripperOrn_vec)
-
-
         maxDist, maxDeviation = 0.25, 0.25
-        if cartDistance < maxDist and directionalDeviation < maxDeviation:
+        if self._dist_to_obj < maxDist and self._dev_from_goal_vec < maxDeviation:
             self.terminated = 1
             self._observation = self.getExtendedObservation()
             return True
@@ -327,50 +357,34 @@ class CustomRobotEnv(gym.Env):
 
     def _reward(self):
 
-        # Obtain measurements
-        blockPos, _ = p.getBasePositionAndOrientation(self.blockUid)
-        gripperPos, gripperOrn_quat = p.getLinkState(self._robot, self._gripperIndex)[0:2]
-        gripperOrn_euler = self._p.getEulerFromQuaternion(gripperOrn_quat)
-
-        # Cartesian distance calculation from gripper to goal:
-        cartDistance = distance.euclidean(blockPos, gripperPos)
-
-        # Directional vector deviation calculation
-        # (Deviation of direction of z-axis of gripper from normalized directional vector from gripper towards goal)
-        gripperToGoal_vec = self.get_normalized_vector_from_a_to_b(gripperPos, blockPos)
-        gripperOrn_vec = self.euler_to_gripper_orientation(gripperOrn_euler)
-        gripperOrn_vec = self.normalize_vector(gripperOrn_vec)
-        directionalDeviation = distance.euclidean(gripperToGoal_vec, gripperOrn_vec)
-
-        # Reward computation:
         reward = 0
 
         # Distance reward
         maxDist = 0.25
-        if cartDistance > maxDist:
-            # Only when being too distant from goal, distance needs adjustment
-            reward += self._last_dist_to_obj - cartDistance
-        self._last_dist_to_obj = cartDistance
+        # Distance needs adjustment only when being too distant from goal
+        if self._dist_to_obj > maxDist:
+            reward += self._improvement_goal_dist
 
         # Orientation reward
         maxDeviation = 0.25
-        if directionalDeviation > maxDeviation:
-            # Only when being too far from desired orientation, orientation needs adjustment
-            reward += self._last_dev_from_goal_vec - directionalDeviation
-        self._last_dev_from_goal_vec = directionalDeviation
+        # Orientation needs adjustment only when being too far from desired orientation
+        if self._dev_from_goal_vec > maxDeviation:
+            reward += self._improvement_goal_dir
 
         # Terminal state rewards
-        if cartDistance < maxDist and directionalDeviation < maxDeviation:
+        if self._dist_to_obj < maxDist and self._dev_from_goal_vec < maxDeviation:
             # Goal reached reward
-            print('Cart dist: ' + str(cartDistance))
-            print('Dir. devi: ' + str(directionalDeviation))
             goalReward = 2
             timeReward = 200 / self._envStepCounter  # if done after 200 time steps, then +1
             reward += (goalReward + timeReward)
+
             print(
                 "#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
             print('Current step-ctr: ' + str(self._envStepCounter))
+            print('Cart dist: ' + str(self._dist_to_obj))
+            print('Dir. devi: ' + str(self._dev_from_goal_vec))
             time.sleep(5)
+
         elif self._envStepCounter > self._maxSteps:
             # Goal not reached punishment
             reward -= 2
