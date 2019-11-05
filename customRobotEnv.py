@@ -35,7 +35,9 @@ class PandaRobotEnv(gym.Env):
                  isDiscrete=False,
                  maxSteps=1000,
                  fixedActionRepetitions=False,
-                 distSpecifications=None):
+                 distSpecifications=None,
+                 maxDist=0.25,
+                 maxDeviation=0.25):
 
         if distSpecifications is None:
             distSpecifications = [0, 'A']  # 0 = Euclidean distance, A = Use improved distance metric
@@ -47,6 +49,8 @@ class PandaRobotEnv(gym.Env):
         self._timeStep = 1. / 240.
         self._actionRepeat = actionRepeat
         self._isEnableSelfCollision = isEnableSelfCollision
+        self._maxDist = maxDist
+        self._maxDeviation = maxDeviation
 
         # Renndering
         self._renders = renders
@@ -66,10 +70,12 @@ class PandaRobotEnv(gym.Env):
         self._gripper_pos = []
         self._gripper_orn_vec = []
         self._gripper_to_goal_vec = []
-        self._dist_to_obj = 0.0
-        self._dev_from_goal_vec = 0.0
-        self._improvement_goal_dist = 0.0
-        self._improvement_goal_dir = 0.0
+        self._dist_to_obj_primary = 0.0             # Metric used for determination of terminal states
+        self._dev_from_goal_vec_primary = 0.0       # Metric used for determination of terminal states
+        self._dist_to_obj_secondary = 0.0           # Metric used for reward computation
+        self._dev_from_goal_vec_secondary = 0.0     # Metric used for reward computation
+        self._reward_dist = 0.0                     # self._dist_to_obj_secondary translated to a reward
+        self._reward_goal_dir = 0.0                 # self._dev_from_goal_vec_secondary translated to a reward
 
         # Simulation
         self._urdfRoot = urdfRoot
@@ -89,8 +95,7 @@ class PandaRobotEnv(gym.Env):
             p.connect(p.DIRECT)
         # timinglog = p.startStateLogging(p.STATE_LOGGING_PROFILE_TIMINGS, "kukaTimings.json")
         self.seed()
-        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
-                                 useFixedBase=1)
+        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0], useFixedBase=1)
         self._num_joints = 7    # Nr of controlled joints
         self._gripperIndex = 9  # Index of end-effector-link for Franka Emika Panda
         self.reset()
@@ -116,6 +121,26 @@ class PandaRobotEnv(gym.Env):
     ##################################
     # Further added helper functions #
     ##################################
+
+    def divergence(self, a, b):
+        """
+            Distance measure:
+            Computed Divergence of two points. Formula (45) from following paper:
+                http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.154.8446&rep=rep1&type=pdf
+
+            :param a: Data point a
+            :param b: Data point b (has to have same length as a)
+        """
+
+        # if not len(a) == len(b):
+        #    raise AssertionError
+
+        d = 0
+        for i in range(len(a)):
+            d += (((a[i] - b[i]) ** 2) / ((a[i] + b[i]) ** 2))
+        d *= 2
+
+        return d
 
     def get_random_joint_config(self, nr_joints=None):
         """
@@ -190,66 +215,100 @@ class PandaRobotEnv(gym.Env):
         return vec
 
     def obtain_measurements(self):
+        """
+            Obtain general purpose measurements like positions of goal object and gripper's center of mass as well as
+            measures used for later reward computations.
+
+            :return: -
+        """
 
         ### Obtain general measurements:
 
-        # Obtain robot's joint space positions for all controlled joints in [joint{1}, joint{nr_controlled_joints}]
+        ## Obtain robot's joint space positions for all controlled joints in [joint{1}, joint{nr_controlled_joints}]
         self._joint_pos = [j[0] for j in self._p.getJointStates(self._robot, range(self._num_joints))]
 
+
+        ## Calculate measure of how close the end-effector (=gripper's Center of Mass (COM)) is to the goal location:
         # Obtain world information
         self._goal_pos, _ = p.getBasePositionAndOrientation(self.blockUid)
         self._gripper_pos, gripperOrn_quat = p.getLinkState(self._robot, self._gripperIndex)[0:2]
-        gripperOrn_eul = self._p.getEulerFromQuaternion(gripperOrn_quat)
 
-
-        ### Obtain performance measurements:
-
-        ## Calculate measure of how close the end-effector (=gripper's Center of Mass (COM)) is to the goal location:
-        if 0 in self._distance_measure_specifications:
-            # Euclidean/Cartesian (straight-line) distance calculation from gripper's COM to goal's COM coordinates
-            newDistance = distance.euclidean(self._gripper_pos, self._goal_pos)
-        else:
-            raise NotImplementedError
-
-
-        if 'A' in self._distance_measure_specifications:
-            # Reward reduction of goal distance compared to that of previous time-step
-            self._improvement_goal_dist = self._dist_to_obj - newDistance
-        elif 'B' in self._distance_measure_specifications:
-            # Reward absolute negative distance from gripper to goal
-            self._improvement_goal_dist = -newDistance
-        else:
-            raise NotImplementedError
+        # Euclidean/Cartesian (straight-line) distance calculation from gripper's COM to goal's COM coordinates
+        euclideanDistance = distance.euclidean(self._gripper_pos, self._goal_pos)
 
 
         ## Measure of how precisely end-effector (=gripper's fingers) points towards goal location:
+        # Calculate vectors
+        gripperOrn_eul = self._p.getEulerFromQuaternion(gripperOrn_quat)
         self._gripper_to_goal_vec = self.get_normalized_vector_from_a_to_b(self._gripper_pos, self._goal_pos)
         self._gripper_orn_vec = self.euler_to_vec_gripper_orientation(gripperOrn_eul)
         self._gripper_orn_vec = self.normalize_vector(self._gripper_orn_vec)
 
+        # Euclidean distance between vector pointing straight from gripper's COM location towards goal's COM
+        # location and vector containing direction of z-axis of coordinate system expressing the orientation of COM
+        # of end-effector (expressed with respect to reference frame attached to base of robotic arm).
+        # (Z-axis of end-effector frame points from end-effector's COM towards its fingers.)
+        euclideanDeviation = distance.euclidean(self._gripper_to_goal_vec, self._gripper_orn_vec)
+
+
+        ### Obtain reward measurements:
+
+        ## Distance based reward signal
+
+        # Compute distance measure underlying continuous distance-based reward signal
         if 0 in self._distance_measure_specifications:
-            # Euclidean distance between vector pointing straight from gripper's COM location towards goal's COM
-            # location and vector containing direction of z-axis of coordinate system expressing the orientation of COM
-            # of end-effector (expressed with respect to reference frame attached to base of robotic arm).
-            # (Z-axis of end-effector frame points from end-effector's COM towards its fingers.)
-            newDirectionalDeviation = distance.euclidean(self._gripper_to_goal_vec, self._gripper_orn_vec)
+            # Euclidean distance
+            newRewardDistance = euclideanDistance
+        elif 1 in self._distance_measure_specifications:
+            # Divergence metric
+            newRewardDistance = self.divergence(self._gripper_pos, self._goal_pos)
         else:
-            raise NotImplementedError
+            newRewardDistance = 0.0
 
-
+        # Translate variable distance measure computed above into a reward:
         if 'A' in self._distance_measure_specifications:
-            # Reward reduction of deviance from gripper's orientation to vector pointing to goal compared to previous
-            # time-step
-            self._improvement_goal_dir = self._dev_from_goal_vec - newDirectionalDeviation
+            # Reward the reduction of goal distance compared to that of previous time-step
+            self._reward_dist = self._dist_to_obj_secondary - newRewardDistance
         elif 'B' in self._distance_measure_specifications:
-            # Reward absolute negative deviation of gripper's orientation from vector pointing towards goal
-            self._improvement_goal_dir = -newDirectionalDeviation
+            # Reward the absolute negative distance from gripper to goal
+            self._reward_dist = -newRewardDistance
+        elif 'C' in self._distance_measure_specifications:
+            # No continuous distance based reward signal
+            self._reward_dist = 0.0
         else:
-            raise NotImplementedError
+            pass
+
+        ## Deviation based reward signal
+
+        # Compute deviation measure underlying continuous deviation-from-goal-direction-based reward signal
+        if 0 in self._distance_measure_specifications:
+            # Euclidean distance
+            newRewardDeviation = euclideanDeviation
+        elif 1 in self._distance_measure_specifications:
+            # Divergence metric
+            newRewardDeviation = self.divergence(self._gripper_to_goal_vec, self._gripper_orn_vec)
+        else:
+            newRewardDeviation = 0.0
+
+        # Translate variable deviation-from-goal-direction measure computed above into a reward:
+        if 'A' in self._distance_measure_specifications:
+            # Reward reduction of deviance from gripper's orientation to vector pointing to goal compared to that of
+            # previous time-step
+            self._reward_goal_dir = self._dev_from_goal_vec_secondary - newRewardDeviation
+        elif 'B' in self._distance_measure_specifications:
+            # Reward the absolute negative deviation of gripper's orientation from vector pointing towards goal
+            self._reward_goal_dir = -newRewardDeviation
+        elif 'C' in self._distance_measure_specifications:
+            # No continuous deviation based reward signal
+            self._reward_goal_dir = 0.0
+        else:
+            pass
 
 
-        self._dist_to_obj = newDistance
-        self._dev_from_goal_vec = newDirectionalDeviation
+        self._dist_to_obj_primary = euclideanDistance
+        self._dist_to_obj_secondary = newRewardDistance
+        self._dev_from_goal_vec_primary = euclideanDeviation
+        self._dev_from_goal_vec_secondary = newRewardDeviation
 
 
     def reset_logged_train_data(self):
@@ -397,8 +456,7 @@ class PandaRobotEnv(gym.Env):
             self._observation = self.getExtendedObservation()
             return True
 
-        maxDist, maxDeviation = 0.25, 0.25
-        if self._dist_to_obj < maxDist and self._dev_from_goal_vec < maxDeviation:
+        if self._dist_to_obj_primary < self._maxDist and self._dev_from_goal_vec_primary < self._maxDeviation:
             # Goal attained
             self.terminated = 1
             self._observation = self.getExtendedObservation()
@@ -414,22 +472,20 @@ class PandaRobotEnv(gym.Env):
         reward = 0
 
         # Distance reward
-        maxDist = 0.25
         # Distance needs adjustment only when being too distant from goal
-        if self._dist_to_obj > maxDist:
-            reward += self._improvement_goal_dist
+        if self._dist_to_obj_primary > self._maxDist:
+            reward += self._reward_dist
 
         # Orientation reward
-        maxDeviation = 0.25
         # Orientation needs adjustment only when being too far from desired orientation
-        if self._dev_from_goal_vec > maxDeviation:
-            reward += self._improvement_goal_dir
+        if self._dev_from_goal_vec_primary > self._maxDeviation:
+            reward += self._reward_goal_dir
 
         # Terminal state rewards
-        if self._dist_to_obj < maxDist and self._dev_from_goal_vec < maxDeviation:
+        if self._dist_to_obj_primary < self._maxDist and self._dev_from_goal_vec_primary < self._maxDeviation:
             # Goal reached reward
             goalReward = 2
-            timeReward = 200 / self._envStepCounter  # if done after 200 time steps, then +1
+            timeReward = 200 / self._envStepCounter  # If successful done after 200 time steps, then another +1
             reward += (goalReward + timeReward)
 
             #print(
@@ -444,8 +500,8 @@ class PandaRobotEnv(gym.Env):
             reward -= 2
 
         print('Current step-ctr: ' + str(self._envStepCounter))
-
         print('Reward: ' + str(reward))
+
         return reward
 
     if parse_version(gym.__version__) < parse_version('0.9.6'):

@@ -68,6 +68,13 @@ params = dict(
                              'Min_grasp_time_steps',
                              'Total_time_steps'                # Total time steps simulated so far
                              ],
+    # Measure of how close end-effector's center of mass (COM) must be to goal location in Euclidean (=straight-line)
+    # distance in order for arm to have reached goal
+    maxDist=0.25,
+    # Measure of how close end-effector's fingers' orientation towards goal must be to vector pointing straight from
+    # end-effector's COM towards goal location in Euclidean (=straight-line) distance in order for arm to have reached
+    # goal
+    maxDeviation=0.25,
 )
 
 
@@ -163,16 +170,20 @@ if __name__ == '__main__':
     # Create and vectorize Environment
     env = PandaRobotEnv(renders=params['render'],
                         fixedActionRepetitions=params['fixed_action_repetitions'],
-                        distSpecifications=params['dist_specification'])
+                        distSpecifications=params['dist_specification'],
+                        maxDist=params['maxDist'],
+                        maxDeviation=params['maxDeviation'])
+
     env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
+    # Check wor whether to continue training of a previously created & trained model
     if args.retrain is not None:
-        # Reload model for continuing training
+        # Reload model (PPO agent) for continuing training
         params['restored'] = args.retrain
         model = PPO2.load(params['restored'])
         model.env = env
     else:
-        # Create the PPO agent
+        # Create new PPO agent
         model = PPO2(policy=params['policy'],
                      env=env,
                      policy_kwargs=dict(act_fun=eval(params['act_fun']),
