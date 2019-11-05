@@ -52,41 +52,58 @@ params = dict(
     path=PATH,
     # Where data for tensorboard is saved to
     tensorboard_log=TENSORBOARD_LOCATION,
+    # Which distance function specifictions are supposed to be used
     dist_specification=[0, 'A'],
+    # Every how many weight updates training progress shall be logged
+    log_train_progress_frequency=10,
+    # Headings for training progress log file
+    log_train_progress_data=['Update_nr',                # Current count of weight updates performed so far
+                             'Grasps',                   # Nr of grasps over last X weight updates
+                             'Avg_grasp_time_steps',     # Average of time steps needed in a simulation to get from init
+                                                         # pose to attaining goal, averaged over the time steps recorded
+                                                         # for all successful grasps over last X weight updates
+                             'Std_grasp_time_steps',
+                             'Max_grasp_time_steps',
+                             'Min_grasp_time_steps',
+                             'Total_time_steps'                # Total time steps simulated so far
+                             ],
 )
 
 
-def create_dir(direct=PATH):
+def create_dir(direct=params['path']):
     """
-    Ensure that a given path exists.
-    :param direct: Directory to be created when necessary.
-    :return: -
+        Ensure that a given path exists.
+        :param direct: Directory to be created when necessary.
+        :return: -
     """
     if not os.path.exists(direct):
         os.makedirs(direct)
 
 
-def save_param_settings():
+def setup_train_log_file(direct=params['path']):
+    create_dir(direct)
+    with open(direct+"training_eval.csv", "a") as fp:
+        wr = csv.writer(fp, dialect='excel', quoting=csv.QUOTE_ALL)
+        wr.writerow(params['log_train_progress_data'])
+
+
+def save_param_settings(direct=params['path']):
     """
-    For convenience. Saves the parameter settings used to train a model to the directory to which the contents of
-    the training run get saved. Facilitates later understanding of under which conditions a model was trained.
-    :return: -
+        For convenience. Saves the parameter settings used to train a model to the directory to which the contents of
+        the training run get saved. Facilitates later understanding of under which conditions a model was trained.
+        :return: -
     """
-    create_dir()
+    create_dir(direct)
 
     # Save as json (easier to read back in)
     js = json.dumps(params)
-    f = open(PATH+"params.json", "w")
+    f = open(direct+"params.json", "w")
     f.write(js)
     f.close()
 
     # Save as csv (nicer to read)
-    csv.register_dialect('customStyle',
-                         delimiter=',',
-                         quoting=csv.QUOTE_ALL,
-                         skipinitialspace=True)
-    with open(PATH+"params.csv", "w") as f:
-        w = csv.writer(f, dialect='customStyle')
+    with open(direct+"params.csv", "w") as f:
+        w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_ALL)
         for key, val in params.items():
             w.writerow([key, val])
     f.close()
@@ -96,6 +113,7 @@ def save_param_settings():
 if __name__ == '__main__':
 
     create_dir(params['tensorboard_log'])
+    setup_train_log_file()
 
     # Create and vectorize Environment
     env = PandaRobotEnv(renders=params['render'],
@@ -110,7 +128,8 @@ if __name__ == '__main__':
         model.env = env
     else:
         # Create the PPO agent
-        model = PPO2(params['policy'], env,
+        model = PPO2(policy=params['policy'],
+                     env=env,
                      policy_kwargs=dict(act_fun=eval(params['act_fun']),
                                         net_arch=params['net_arch']),
                      verbose=params['verbose'],
@@ -121,8 +140,9 @@ if __name__ == '__main__':
     save_param_settings()
 
     # Specify additional parameters for callback-method
-    model.check_point_location = params['path']
+    model.path = params['path']
     model.checkpoint_frequency = params['checkpoint_frequency']
+    model.log_train_progress_frequency = params['log_train_progress_frequency']
 
     # Retrieve the environment
     env = model.get_env()

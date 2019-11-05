@@ -1,4 +1,5 @@
-import os
+import os, csv
+import statistics
 
 def callback(locals_, globals_):
     """
@@ -12,24 +13,53 @@ def callback(locals_, globals_):
     updates_ = locals_['update']
 
     if updates_ % self_.checkpoint_frequency == 0:
-        if not os.path.exists(self_.check_point_location):
-            os.makedirs(self_.check_point_location)
+        # Save checkpoint
+        if not os.path.exists(self_.path):
+            os.makedirs(self_.path)
 
-        check_point = updates_  # int(updates_ / self_.checkpoint_frequency)
-        self_.save(self_.check_point_location + "checkpoint_" + str(check_point))
+        check_point = updates_
+        self_.save(self_.path + "checkpoint_" + str(check_point))
 
-    # TODO: save training progress to file: create file in main? -- Specify row headlines:
-    #  Update_nr | grasp | avg_graps_time_steps | std_graps_time_steps | min_graps_time_steps | max_graps_time_steps
-    if updates_ % self_.training_eval_frequency == 0:
-        with open('training_eval.csv', 'a') as fd:
+    if updates_ % self_.log_train_progress_frequency == 0:
+        # Log training progress
+        if not os.path.exists(self_.path):
+            os.makedirs(self_.path)
+        '''
+            Logging:
+                ['Update_nr',                # Current count of weight updates performed so far
+                 'Grasps',                   # Nr of grasps over last X weight updates
+                 'Avg_grasp_time_steps',     # Average of time steps needed in a simulation to get from init
+                                             # pose to attaining goal, averaged over the time steps recorded
+                                             # for all successful grasps over last X weight updates
+                 'Std_grasp_time_steps',
+                 'Max_grasp_time_steps',
+                 'Min_grasp_time_steps',
+                 'Total_time_steps'                # Total time steps simulated so far
+                 ]
+        '''
 
-            # TODO URGENT : reset counters IFF(!!!) this method is called...
-            #  Rows:
-            #  Update_nr | grasp | avg_gr_time_steps | std_gr_time_steps | min_gr_time_steps | max_gr_time_steps
+        grasps = self_.get_env().envs[0].grasps_per_update_interval
+        grasp_times = self_.get_env().envs[0].grasp_time_steps_needed_per_update_interval
+        if len(grasp_times) == 0:
+            grasp_times.append(float('nan'), float('nan'))
+        avg_grasp_time_steps = statistics.mean(grasp_times)
+        std_grasp_time_steps = statistics.stdev(grasp_times)
+        max_grasp_time_steps = max(grasp_times)
+        min_grasp_time_steps = min(grasp_times)
+        total_time_steps = self_.num_timesteps
 
-            row = str("...")  # get data...
-            fd.write(row)
+        row = [updates_,
+               grasps,
+               avg_grasp_time_steps,
+               std_grasp_time_steps,
+               max_grasp_time_steps,
+               min_grasp_time_steps,
+               total_time_steps]
 
-            self_.get_env().reset_training_eval_counters()
+        with open(self_.path + "training_eval.csv", "a") as fp:
+            wr = csv.writer(fp, dialect='excel', quoting=csv.QUOTE_ALL)
+            wr.writerow(row)
+
+        self_.get_env().reset_logged_train_data()
 
     return True

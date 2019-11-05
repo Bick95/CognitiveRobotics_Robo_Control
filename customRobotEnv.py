@@ -59,8 +59,7 @@ class PandaRobotEnv(gym.Env):
         # Observations & Measurements
         self._envStepCounter = 0
         self.grasps_per_update_interval = 0
-        self.grasp_time_steps_per_update_interval = []
-        self._steps_since_reset = 0
+        self.grasp_time_steps_needed_per_update_interval = []
         self._observation = []
         self._joint_pos = []
         self._goal_pos = []
@@ -252,6 +251,15 @@ class PandaRobotEnv(gym.Env):
         self._dist_to_obj = newDistance
         self._dev_from_goal_vec = newDirectionalDeviation
 
+
+    def reset_logged_train_data(self):
+        """
+            For logging training progress. Called via PPO agent's callback.
+            :return: -
+        """
+        self.grasps_per_update_interval = 0
+        self.grasp_time_steps_needed_per_update_interval = []
+
     ##############################
     # End added helper functions #
     ##############################
@@ -259,7 +267,6 @@ class PandaRobotEnv(gym.Env):
 
     def reset(self):
         self.terminated = 0
-        self._steps_since_reset = 0
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=150)
         p.setTimeStep(self._timeStep)
@@ -313,8 +320,6 @@ class PandaRobotEnv(gym.Env):
         return self._observation
 
     def step(self, action):
-
-        self._steps_since_reset += 1
 
         # Determine how many times in a row commanded actions are supposed to be executed. Min=1, Max=10 times.
         if self._fixed_nr_action_repetitions:
@@ -397,8 +402,9 @@ class PandaRobotEnv(gym.Env):
             # Goal attained
             self.terminated = 1
             self._observation = self.getExtendedObservation()
+            # Log training progress
             self.grasps_per_update_interval += 1
-            self.grasp_time_steps_per_update_interval.append(self._steps_since_reset)
+            self.grasp_time_steps_needed_per_update_interval.append(self._envStepCounter)
             return True
 
         return False
