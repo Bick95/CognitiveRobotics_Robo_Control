@@ -23,7 +23,7 @@ TENSORBOARD_LOCATION = PATH + "tensorboard/"    # For tensorboard usage
 
 RENDER = True
 FIXED_NUM_REPETITIONS = True
-CHECKPOINT_FREQUENCY = 100
+CHECKPOINT_FREQUENCY = 50
 
 params = dict(
     # Whether to render simulation during training, mainly true for debugging

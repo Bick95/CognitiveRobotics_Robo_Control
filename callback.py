@@ -6,7 +6,7 @@ def callback(locals_, globals_):
     Implemented by letting agent save its internal NN model at a given frequency (=checkpoint_frequency).
     :param locals_: Local variables inside RL agent
     :param globals_: Global variables iside python interpreter
-    :return:
+    :return: -
     """
     self_ = locals_['self']
     updates_ = locals_['update']
