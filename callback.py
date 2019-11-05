@@ -12,16 +12,16 @@ def callback(locals_, globals_):
     self_ = locals_['self']
     updates_ = locals_['update']
 
+    # Save checkpoint
     if updates_ % self_.checkpoint_frequency == 0:
-        # Save checkpoint
         if not os.path.exists(self_.path):
             os.makedirs(self_.path)
 
         check_point = updates_
         self_.save(self_.path + "checkpoint_" + str(check_point))
 
+    # Log training progress
     if updates_ % self_.log_train_progress_frequency == 0:
-        # Log training progress
         if not os.path.exists(self_.path):
             os.makedirs(self_.path)
         '''
@@ -37,13 +37,23 @@ def callback(locals_, globals_):
                  'Total_time_steps'                # Total time steps simulated so far
                  ]
         '''
-
+        # TODO: make it work for multiple environments in vectorized environment; Possibly 1 log file per env
         grasps = self_.get_env().envs[0].grasps_per_update_interval
         grasp_times = self_.get_env().envs[0].grasp_time_steps_needed_per_update_interval
+        #if len(grasp_times) < 1:
+        #    grasp_times.extend([float('nan')]*(1-len(grasp_times)))
         if len(grasp_times) == 0:
-            grasp_times.append(float('nan'), float('nan'))
+            # Mean() takes only lists of at least one element
+            grasp_times.extend([float('nan')])
+
         avg_grasp_time_steps = statistics.mean(grasp_times)
-        std_grasp_time_steps = statistics.stdev(grasp_times)
+
+        if len(grasp_times) == 1:
+            # Std() takes only lists of at least two elements
+            std_grasp_time_steps = float('nan')
+        else:
+            std_grasp_time_steps = statistics.stdev(grasp_times)
+
         max_grasp_time_steps = max(grasp_times)
         min_grasp_time_steps = min(grasp_times)
         total_time_steps = self_.num_timesteps
@@ -60,6 +70,6 @@ def callback(locals_, globals_):
             wr = csv.writer(fp, dialect='excel', quoting=csv.QUOTE_ALL)
             wr.writerow(row)
 
-        self_.get_env().reset_logged_train_data()
+        self_.get_env().envs[0].reset_logged_train_data()
 
     return True
