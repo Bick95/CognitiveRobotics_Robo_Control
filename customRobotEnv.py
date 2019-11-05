@@ -412,12 +412,12 @@ class PandaRobotEnv(gym.Env):
             timeReward = 200 / self._envStepCounter  # if done after 200 time steps, then +1
             reward += (goalReward + timeReward)
 
-            print(
-                "#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
-            print('Current step-ctr: ' + str(self._envStepCounter))
-            print('Cart dist: ' + str(self._dist_to_obj))
-            print('Dir. devi: ' + str(self._dev_from_goal_vec))
-            time.sleep(1)
+            #print(
+            #    "#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
+            #print('Current step-ctr: ' + str(self._envStepCounter))
+            #print('Cart dist: ' + str(self._dist_to_obj))
+            #print('Dir. devi: ' + str(self._dev_from_goal_vec))
+            #time.sleep(1)
 
         elif self._envStepCounter > self._maxSteps:
             # Goal not reached punishment

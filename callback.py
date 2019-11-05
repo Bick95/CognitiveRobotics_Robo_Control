@@ -1,6 +1,13 @@
 import os
 
 def callback(locals_, globals_):
+    """
+    Method passed to RL (PPO2) agent in order to make it save checkpoints during training.
+    Implemented by letting agent save its internal NN model at a given frequency (=checkpoint_frequency).
+    :param locals_: Local variables inside RL agent
+    :param globals_: Global variables iside python interpreter
+    :return:
+    """
     self_ = locals_['self']
     updates_ = locals_['update']
 
