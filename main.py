@@ -54,6 +54,11 @@ params = dict(
 
 
 def create_dir(direct=PATH):
+    """
+    Ensure that a given path exists.
+    :param direct: Directory to be created when necessary.
+    :return: -
+    """
     if not os.path.exists(direct):
         os.makedirs(direct)
 
@@ -96,10 +101,9 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 1:
         # Reload model for continuing training
-        path = sys.argv[1]
+        path = params['restored'] = sys.argv[1]
         model = PPO2.load(path)
         model.env = env
-        params['restored'] = path
     else:
         # Create the PPO agent
         model = PPO2(params['policy'], env,
