@@ -21,7 +21,9 @@ SAVE_MODEL_DESTINATION = PATH + SUFFIX          # For saving checkpoints and fin
 TENSORBOARD_LOCATION = PATH + "tensorboard/"    # For tensorboard usage
 
 
-RENDER = False
+# TODO: make parameters input arguments
+
+RENDER = True
 FIXED_NUM_REPETITIONS = True
 CHECKPOINT_FREQUENCY = 10
 

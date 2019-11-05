@@ -21,6 +21,8 @@ largeValObservation = 100
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
+# TODO: getting average nr grasps per 10 updates + times
+
 class PandaRobotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
@@ -36,14 +38,16 @@ class PandaRobotEnv(gym.Env):
 
         if distSpecifications is None:
             distSpecifications = [0, 'A']  # 0 = Euclidean distance, A = Use improved distance metric
+
+        # Parameter settings
+        self._distance_measure_specifications = distSpecifications
+        self._fixed_nr_action_repetitions = fixedActionRepetitions
         self._isDiscrete = isDiscrete
         self._timeStep = 1. / 240.
-        self._urdfRoot = urdfRoot
         self._actionRepeat = actionRepeat
         self._isEnableSelfCollision = isEnableSelfCollision
-        self._observation = []
-        self._envStepCounter = 0
 
+        # Renndering
         self._renders = renders
         self._maxSteps = maxSteps
         self.terminated = 0
@@ -51,6 +55,9 @@ class PandaRobotEnv(gym.Env):
         self._cam_yaw = 180
         self._cam_pitch = -40
 
+        # Observations & Measurements
+        self._envStepCounter = 0
+        self._observation = []
         self._joint_pos = []
         self._goal_pos = []
         self._gripper_pos = []
@@ -61,12 +68,10 @@ class PandaRobotEnv(gym.Env):
         self._improvement_goal_dist = 0.0
         self._improvement_goal_dir = 0.0
 
+        # Simulation
+        self._urdfRoot = urdfRoot
         self._trayUid = None
         self.blockUid = None
-
-        self._distance_measure_specifications = distSpecifications
-
-        self._fixed_nr_action_repetitions = fixedActionRepetitions
 
         self._p = p
         #self._robo_path = 'RobotModels/Panda/deps/Panda/panda.urdf'
