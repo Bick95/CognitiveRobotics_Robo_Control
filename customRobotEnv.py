@@ -21,7 +21,8 @@ largeValObservation = 100
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
-# TODO: getting average nr grasps per 10 updates + times
+# TODO 1: getting average nr grasps per 10 updates + times
+# TODO 2: define actual reward measure/function for final evaluation
 
 class PandaRobotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
@@ -57,6 +58,9 @@ class PandaRobotEnv(gym.Env):
 
         # Observations & Measurements
         self._envStepCounter = 0
+        self.grasps_per_update_interval = 0
+        self.grasp_time_steps_per_update_interval = []
+        self._steps_since_reset = 0
         self._observation = []
         self._joint_pos = []
         self._goal_pos = []
@@ -116,12 +120,12 @@ class PandaRobotEnv(gym.Env):
 
     def get_random_joint_config(self, nr_joints=None):
         """
-        Returns a random joint angle in range [-1,1] in radians. One random angle is generated for each controlled joint
-        from joint 1 through nr_joints, where nr_joints is the number of joints for which a random config has to be
-        returned.
+            Returns a random joint angle in range [-1,1] in radians. One random angle is generated for each controlled joint
+            from joint 1 through nr_joints, where nr_joints is the number of joints for which a random config has to be
+            returned.
 
-        :param nr_joints: Random joint angles are generated for joints 1 through nr_joints. Optional.
-        :return: List of joint angles. One random joint angle in radians per requested joint
+            :param nr_joints: Random joint angles are generated for joints 1 through nr_joints. Optional.
+            :return: List of joint angles. One random joint angle in radians per requested joint
         """
         if nr_joints is None:
             nr_joints = self._num_joints
@@ -129,11 +133,11 @@ class PandaRobotEnv(gym.Env):
 
     def apply_joint_config(self, config):
         """
-        Instantaneously apply a given joint configuration to a robotic arm.
+            Instantaneously apply a given joint configuration to a robotic arm.
 
-        :param config: list of joint angles to be applied to joints 1 through n, respectively;
-                       n=number of joint angles provided
-        :return: -
+            :param config: list of joint angles to be applied to joints 1 through n, respectively;
+                           n=number of joint angles provided
+            :return: -
         """
         for i in range(len(config)):
             self._p.resetJointState(self._robot, i, config[i])
@@ -255,6 +259,7 @@ class PandaRobotEnv(gym.Env):
 
     def reset(self):
         self.terminated = 0
+        self._steps_since_reset = 0
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=150)
         p.setTimeStep(self._timeStep)
@@ -274,8 +279,7 @@ class PandaRobotEnv(gym.Env):
                                    orn[0], orn[1], orn[2], orn[3])
 
         p.setGravity(0, 0, -10)
-        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0],
-                                 useFixedBase=1)
+        self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0], useFixedBase=1)
         self._envStepCounter = 0
 
         # Set robotic arm to random initial pose
@@ -296,8 +300,8 @@ class PandaRobotEnv(gym.Env):
 
     def getExtendedObservation(self):
         """
-        Construct an observation that serves as input to the reinforcement learning agent.
-        :return: Representation of state of robotic arm and its surrounding
+            Construct an observation that serves as input to the reinforcement learning agent.
+            :return: Representation of state of robotic arm and its surrounding
         """
         self._observation = []
         self._observation.extend(self._goal_pos)               # Cartesian position of goal
@@ -309,6 +313,8 @@ class PandaRobotEnv(gym.Env):
         return self._observation
 
     def step(self, action):
+
+        self._steps_since_reset += 1
 
         # Determine how many times in a row commanded actions are supposed to be executed. Min=1, Max=10 times.
         if self._fixed_nr_action_repetitions:
@@ -388,8 +394,11 @@ class PandaRobotEnv(gym.Env):
 
         maxDist, maxDeviation = 0.25, 0.25
         if self._dist_to_obj < maxDist and self._dev_from_goal_vec < maxDeviation:
+            # Goal attained
             self.terminated = 1
             self._observation = self.getExtendedObservation()
+            self.grasps_per_update_interval += 1
+            self.grasp_time_steps_per_update_interval.append(self._steps_since_reset)
             return True
 
         return False
