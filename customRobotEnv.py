@@ -499,8 +499,8 @@ class PandaRobotEnv(gym.Env):
             # Goal not reached punishment
             reward -= 2
 
-        print('Current step-ctr: ' + str(self._envStepCounter))
-        print('Reward: ' + str(reward))
+        #print('Current step-ctr: ' + str(self._envStepCounter))
+        #print('Reward: ' + str(reward))
 
         return reward
 
