@@ -21,7 +21,6 @@ largeValObservation = 100
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
-# TODO 1: getting average nr grasps per 10 updates + times
 # TODO 2: define actual reward measure/function for final evaluation
 
 class PandaRobotEnv(gym.Env):
