@@ -1,4 +1,4 @@
-import os, sys
+import os, time
 import json, csv
 import gym
 import tensorflow as tf
@@ -7,6 +7,7 @@ from customRobotEnv import PandaRobotEnv
 from callback import callback
 from stable_baselines.common.vec_env import DummyVecEnv
 from datetime import datetime
+import argparse
 
 now = datetime.now()
 
@@ -21,7 +22,7 @@ SAVE_MODEL_DESTINATION = PATH + SUFFIX          # For saving checkpoints and fin
 TENSORBOARD_LOCATION = PATH + "tensorboard/"    # For tensorboard usage
 
 
-# TODO: make parameters input arguments
+# DEFAULTS:
 
 RENDER = True
 FIXED_NUM_REPETITIONS = True
@@ -110,7 +111,56 @@ def save_param_settings(direct=params['path']):
 
 
 
+def get_args():
+    """
+        Function for reading in command line arguments specified by flags.
+        Call e.g.
+
+            python3 main.py -r Results/.../checkpoint_7770.zip -p Params/param_setting_1.json
+
+        for  retraining model saved at 'Results/.../checkpoint_7770.zip' using parameters
+        specified in 'Params/param_setting_1.json'.
+
+        :return: Dictionaly-like object containing a field per added argument.
+                 If no value was provided for an argument, arg's value will be None
+    """
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-r", "--retrain", "--restore", help="Path to zip archive for continuing training", type=str)
+    parser.add_argument("-p", "--params", "--parameters", help="Training parameter specifications", type=str)
+
+    args = parser.parse_args()
+
+    return args
+
+
+def read_in_input_params(file_name):
+    """
+        Reads in parameter settings specified in file found under path_file_name. Then updates params specified above,
+        accordingly.
+
+        :param file_name: Path to file containing parameter specifications
+        :return: -
+    """
+    print('Params before:')
+    print(params)
+    with open(file_name) as json_file:
+        data = json.load(json_file)
+    params.update(data)
+    print('Params after:')
+    print(params)
+    time.sleep(200)
+
+
 if __name__ == '__main__':
+
+    # Input args provided by flags
+    args = get_args()
+
+    # Read in provided input parameters from file & update params
+    if args.params is not None:
+        read_in_input_params(args.params)
 
     create_dir(params['tensorboard_log'])
     setup_train_log_file()
@@ -121,9 +171,9 @@ if __name__ == '__main__':
                         distSpecifications=params['dist_specification'])
     env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
-    if len(sys.argv) > 1:
+    if args.retrain is not None:
         # Reload model for continuing training
-        path = params['restored'] = sys.argv[1]
+        path = params['restored'] = args.retrain
         model = PPO2.load(path)
         model.env = env
     else:
