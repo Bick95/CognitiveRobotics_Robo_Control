@@ -130,9 +130,7 @@ def get_args():
     parser.add_argument("-r", "--retrain", "--restore", help="Path to zip archive for continuing training", type=str)
     parser.add_argument("-p", "--params", "--parameters", help="Training parameter specifications", type=str)
 
-    args = parser.parse_args()
-
-    return args
+    return parser.parse_args()
 
 
 def read_in_input_params(file_name):
@@ -143,24 +141,21 @@ def read_in_input_params(file_name):
         :param file_name: Path to file containing parameter specifications
         :return: -
     """
-    print('Params before:')
-    print(params)
+
     with open(file_name) as json_file:
         data = json.load(json_file)
     params.update(data)
-    print('Params after:')
-    print(params)
-    time.sleep(200)
 
 
 if __name__ == '__main__':
 
-    # Input args provided by flags
+    # Read in arguments provided via command line and specified via flags
     args = get_args()
 
     # Read in provided input parameters from file & update params
     if args.params is not None:
-        read_in_input_params(args.params)
+        params['provided_params_file'] = args.params
+        read_in_input_params(params['provided_params_file'])
 
     create_dir(params['tensorboard_log'])
     setup_train_log_file()
@@ -173,8 +168,8 @@ if __name__ == '__main__':
 
     if args.retrain is not None:
         # Reload model for continuing training
-        path = params['restored'] = args.retrain
-        model = PPO2.load(path)
+        params['restored'] = args.retrain
+        model = PPO2.load(params['restored'])
         model.env = env
     else:
         # Create the PPO agent
