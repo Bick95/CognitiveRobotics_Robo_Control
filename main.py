@@ -21,9 +21,9 @@ SAVE_MODEL_DESTINATION = PATH + SUFFIX          # For saving checkpoints and fin
 TENSORBOARD_LOCATION = PATH + "tensorboard/"    # For tensorboard usage
 
 
-RENDER = True
+RENDER = False
 FIXED_NUM_REPETITIONS = True
-CHECKPOINT_FREQUENCY = 50
+CHECKPOINT_FREQUENCY = 10
 
 params = dict(
     # Whether to render simulation during training, mainly true for debugging
@@ -37,7 +37,7 @@ params = dict(
     # Network's learning rate
     learning_rate=5e-4,
     # Number of training time steps
-    total_timesteps=200000,
+    total_timesteps=1000000,
     # Name of algo used
     algo=ALGO,
     # Identifier for simulation model used, containing name of env and time stamp
@@ -50,7 +50,7 @@ params = dict(
     path=PATH,
     # Where data for tensorboard is saved to
     tensorboard_log=TENSORBOARD_LOCATION,
-    dist_specification=[0, 'B'],
+    dist_specification=[0, 'A'],
 )
 
 
