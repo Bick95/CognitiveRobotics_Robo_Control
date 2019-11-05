@@ -32,10 +32,10 @@ class PandaRobotEnv(gym.Env):
                  isDiscrete=False,
                  maxSteps=1000,
                  fixedActionRepetitions=False,
-                 distMeasures=None):
+                 distSpecifications=None):
 
-        if distMeasures is None:
-            distMeasures = [0, 'A']  # 0 = Euclidean distance, A = Use improved distance metric
+        if distSpecifications is None:
+            distSpecifications = [0, 'A']  # 0 = Euclidean distance, A = Use improved distance metric
         self._isDiscrete = isDiscrete
         self._timeStep = 1. / 240.
         self._urdfRoot = urdfRoot
@@ -64,7 +64,7 @@ class PandaRobotEnv(gym.Env):
         self._trayUid = None
         self.blockUid = None
 
-        self._distance_measure_specifications = distMeasures
+        self._distance_measure_specifications = distSpecifications
 
         self._fixed_nr_action_repetitions = fixedActionRepetitions
 

@@ -50,6 +50,7 @@ params = dict(
     path=PATH,
     # Where data for tensorboard is saved to
     tensorboard_log=TENSORBOARD_LOCATION,
+    dist_specification=[0, 'B'],
 )
 
 
@@ -96,7 +97,8 @@ if __name__ == '__main__':
 
     # Create and vectorize Environment
     env = PandaRobotEnv(renders=params['render'],
-                        fixedActionRepetitions=params['fixed_action_repetitions'])
+                        fixedActionRepetitions=params['fixed_action_repetitions'],
+                        distSpecifications=params['dist_specification'])
     env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
     if len(sys.argv) > 1:
