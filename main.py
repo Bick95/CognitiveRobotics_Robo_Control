@@ -1,4 +1,4 @@
-import os, sys
+import os, time
 import json, csv
 import gym
 import tensorflow as tf
@@ -24,7 +24,7 @@ TENSORBOARD_LOCATION = PATH + "tensorboard/"    # For tensorboard usage
 
 # DEFAULTS:
 
-RENDER = True
+RENDER = False
 FIXED_NUM_REPETITIONS = True
 CHECKPOINT_FREQUENCY = 10
 
@@ -156,19 +156,12 @@ def read_in_input_params(file_name):
 
 if __name__ == '__main__':
 
-    # Doesn't work on Peregrine
-    '''
     # Read in arguments provided via command line and specified via flags
     args = get_args()
 
     # Read in provided input parameters from file & update params
     if args.params is not None:
         params['provided_params_file'] = args.params
-        read_in_input_params(params['provided_params_file'])
-    '''
-
-    if len(sys.argv) > 1:
-        params['provided_params_file'] = sys.argv[1]
         read_in_input_params(params['provided_params_file'])
 
     create_dir(params['tensorboard_log'])
@@ -184,8 +177,6 @@ if __name__ == '__main__':
     env = DummyVecEnv([lambda: env])   # The algorithms require a vectorized environment to run, hence vectorize
 
     # Check wor whether to continue training of a previously created & trained model
-    # Disabled for Peregrine usage
-    '''
     if args.retrain is not None:
         # Reload model (PPO agent) for continuing training
         params['restored'] = args.retrain
@@ -200,15 +191,6 @@ if __name__ == '__main__':
                      verbose=params['verbose'],
                      learning_rate=params['learning_rate'],
                      tensorboard_log=params['tensorboard_log'])
-    '''
-    # Create new PPO agent
-    model = PPO2(policy=params['policy'],
-                 env=env,
-                 policy_kwargs=dict(act_fun=eval(params['act_fun']),
-                                    net_arch=params['net_arch']),
-                 verbose=params['verbose'],
-                 learning_rate=params['learning_rate'],
-                 tensorboard_log=params['tensorboard_log'])
 
     # Save parameters to file
     save_param_settings()

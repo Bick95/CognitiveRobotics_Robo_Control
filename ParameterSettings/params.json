@@ -7,7 +7,7 @@
 "checkpoint_frequency": 10, 
 "log_train_progress_frequency": 10, 
 "dist_specification": [1, "A"], 
-"render": true, 
+"render": false,
 "fixed_action_repetitions": false, 
 "learning_rate": 0.0005,
 "verbose": 1
