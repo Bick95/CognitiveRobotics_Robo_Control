@@ -1,0 +1,14 @@
+{
+"algo": "PPO2", 
+"total_timesteps": 1000000,
+"policy": "MlpPolicy",  
+"net_arch": [150, 150], 
+"act_fun": "tf.nn.tanh", 
+"checkpoint_frequency": 10, 
+"log_train_progress_frequency": 10, 
+"dist_specification": ["C"], 
+"render": false,
+"fixed_action_repetitions": true, 
+"learning_rate": 0.0005,
+"verbose": 1
+}
