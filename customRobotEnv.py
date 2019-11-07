@@ -37,7 +37,8 @@ class PandaRobotEnv(gym.Env):
                  fixedActionRepetitions=False,
                  distSpecifications=None,
                  maxDist=0.25,
-                 maxDeviation=0.25):
+                 maxDeviation=0.25,
+                 evalFlag=False):
 
         if distSpecifications is None:
             distSpecifications = [0, 'A']  # 0 = Euclidean distance, A = Use improved distance metric
@@ -51,6 +52,7 @@ class PandaRobotEnv(gym.Env):
         self._isEnableSelfCollision = isEnableSelfCollision
         self._maxDist = maxDist
         self._maxDeviation = maxDeviation
+        self._evalFlag = evalFlag
 
         # Renndering
         self._renders = renders
@@ -321,16 +323,24 @@ class PandaRobotEnv(gym.Env):
         self.grasp_time_steps_needed_per_update_interval = []
 
 
-    def get_eval_info(self):
+    def get_eval_info(self, eval_time_steps=1000):
         """
             Returns information specifically for evaluation phase.
-        :return: First position: 1 if goal reached else 0; Second: time steps elapsed since last reset
+        :return: First position: 1 if goal reached else 0; Second: time steps elapsed since last reset; Third: whether
+                    terminated or not
         """
         binary_reward = 0
+
         if self._dist_to_obj_primary < self._maxDist and self._dev_from_goal_vec_primary < self._maxDeviation:
             binary_reward += 1
 
-        return [binary_reward, self._envStepCounter]
+        done = (self._envStepCounter == eval_time_steps) or (binary_reward == 1)
+
+        return [binary_reward, self._envStepCounter, done]
+
+
+    def set_step_counter(self, time_steps):
+        self._envStepCounter = time_steps
 
     ##############################
     # End added helper functions #
@@ -429,10 +439,13 @@ class PandaRobotEnv(gym.Env):
         self._observation = self.getExtendedObservation()
 
         done = self._termination
+        done = done if not self._evalFlag else False  # In case of evaluation run, eval script will handle termination
 
         reward = self._reward()
 
-        return np.array(self._observation), reward, done, {}
+        info = self.get_eval_info() if self._evalFlag else {}
+
+        return np.array(self._observation), reward, done, info
 
     def render(self, mode="rgb_array", close=False):
         if mode != "rgb_array":
@@ -465,7 +478,7 @@ class PandaRobotEnv(gym.Env):
     @property
     def _termination(self):
 
-        if self.terminated or self._envStepCounter > self._maxSteps:
+        if self.terminated or self._envStepCounter >= self._maxSteps:
             self._observation = self.getExtendedObservation()
             return True
 
@@ -501,19 +514,9 @@ class PandaRobotEnv(gym.Env):
             timeReward = 200 / self._envStepCounter  # If successful done after 200 time steps, then another +1
             reward += (goalReward + timeReward)
 
-            #print(
-            #    "#######\n#######\n#######\n#######\nsuccessfully grasped a block!!!\n#######\n#######\n#######\n#######")
-            #print('Current step-ctr: ' + str(self._envStepCounter))
-            #print('Cart dist: ' + str(self._dist_to_obj))
-            #print('Dir. devi: ' + str(self._dev_from_goal_vec))
-            #time.sleep(1)
-
-        elif self._envStepCounter > self._maxSteps:
+        elif self._envStepCounter >= self._maxSteps:
             # Goal not reached punishment
             reward -= 2
-
-        #print('Current step-ctr: ' + str(self._envStepCounter))
-        #print('Reward: ' + str(reward))
 
         return reward
 
