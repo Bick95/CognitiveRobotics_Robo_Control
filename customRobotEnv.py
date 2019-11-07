@@ -1,8 +1,9 @@
 import os, inspect
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-print("current_dir=" + currentdir)
 os.sys.path.insert(0, currentdir)
+
+PATH_TO_MODELS = os.path.abspath(os.path.join(os.path.dirname(__file__)))  # Path to robot models
 
 import math
 import gym
@@ -82,8 +83,9 @@ class PandaRobotEnv(gym.Env):
         self.blockUid = None
 
         self._p = p
-        #self._robo_path = 'RobotModels/Panda/deps/Panda/panda.urdf'
-        self._robo_path = 'RobotModels/Pybullet_Robots/data/franka_panda/panda.urdf'
+
+        #self._robo_path = PATH_TO_MODELS + 'RobotModels/Panda/deps/Panda/panda.urdf'
+        self._robo_path = PATH_TO_MODELS + '/RobotModels/Pybullet_Robots/data/franka_panda/panda.urdf'
 
         if self._renders:
             cid = p.connect(p.SHARED_MEMORY)
@@ -317,6 +319,18 @@ class PandaRobotEnv(gym.Env):
         """
         self.grasps_per_update_interval = 0
         self.grasp_time_steps_needed_per_update_interval = []
+
+
+    def get_eval_info(self):
+        """
+            Returns information specifically for evaluation phase.
+        :return: First position: 1 if goal reached else 0; Second: time steps elapsed since last reset
+        """
+        binary_reward = 0
+        if self._dist_to_obj_primary < self._maxDist and self._dev_from_goal_vec_primary < self._maxDeviation:
+            binary_reward += 1
+
+        return [binary_reward, self._envStepCounter]
 
     ##############################
     # End added helper functions #
