@@ -9,13 +9,23 @@ from stable_baselines.common.vec_env import DummyVecEnv
 from datetime import datetime
 import argparse
 
+import random
+import string
+
+def randomString(length=10):
+    """
+        Generate a random string of given length
+    """
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))
+
 now = datetime.now()
 
 # Specify save-directories
 ALGO = "PPO2"
 ENV_NAME = "PandaController"
 TIME_STAMP = now.strftime("_%Y_%d_%m__%H_%M_%S__%f")
-MODEL_ID = ENV_NAME + TIME_STAMP
+MODEL_ID = ENV_NAME + TIME_STAMP + randomString()
 PATH = "Results/" + ALGO + "/" + MODEL_ID + "/"
 SUFFIX = "final_model"
 SAVE_MODEL_DESTINATION = PATH + SUFFIX          # For saving checkpoints and final model

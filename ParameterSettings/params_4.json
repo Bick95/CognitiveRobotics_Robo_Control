@@ -4,7 +4,7 @@
 "policy": "MlpPolicy",  
 "net_arch": [150, 150], 
 "act_fun": "tf.nn.tanh", 
-"checkpoint_frequency": 10, 
+"checkpoint_frequency": 100,
 "log_train_progress_frequency": 10, 
 "dist_specification": [1, "B"],
 "render": false,
