@@ -108,16 +108,23 @@ def remove_redundant_runs(path, data_directories):
     return parameter_specification_ids, discarded_data_directories
 
 
-def save_which_data_was_used(direct, used_dict, not_used_list):
+def save_which_data_was_used(direct, used_dict, not_used_lists):
     """
         Specify which folders containing data were used for evaluation. Each folder contains all data generated during
         a single training run.
     :param direct: Path to a folder containing all used/non-used folders/directories.
     :param used_dict: Dictionary containing the list of folders used for evaluation per param_setting_specification_id
-    :param not_used_list: List containing folders not used for evaluation
+    :param not_used_lists: Two list containing folders excluded from evaluation;
+                           1. Excluded due to being incomplete
+                           2. Excluded due to number of data directories to be included per param setting being exceeded
     :return: -
     """
     create_dir(direct)
+
+    print('Used:')
+    print(used_dict)
+    print('Not used:')
+    print(not_used_lists)
 
     # Save as csv which data was used (nicer to read)
     with open(direct + "/" + "used_data.csv", "w") as f:
@@ -130,32 +137,37 @@ def save_which_data_was_used(direct, used_dict, not_used_list):
     # Save as csv which data was not used (nicer to read)
     with open(direct + "/" + "not_used_data.csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_ALL)
-        for val in not_used_list:
+        w.writerow(['Incomplete data sets:'])
+        w.writerow([''])
+        for val in not_used_lists[0]:
             w.writerow([val])
+        for _ in range(2):
+            w.writerow([''])
+        w.writerow(['Excluded due to number of data directories to be included per param setting being exceeded:'])
+        w.writerow([''])
+        for val in not_used_lists[1]:
+            w.writerow([val])
+        w.writerow([''])
+        w.writerow(['-- Done.'])
+
     f.close()
 
 
-def save_data_package_to_file(direct, name, data_arr):
+def save_dict_to_file(direct, name, data_dict):
     """
-        General purpose data saving. Takes either list or Numpy array as input for saving.
+        Dictionary saving.
     :param direct: Folder where to store emission file
     :param name: Indication how to call resulting file
-    :param data_arr: List/Numpy-array containing data (arrays saved row-wise to file)
-    :return: -
+    :param data_dict: Dictionary containing parameter-setting-ids and their respective evaluation-statistics
+    :return: - (save to file)
     """
     create_dir(direct)
-    # Clean name which was itself a directory+name beforehand
-    name = name.replace('ParameterSettings/', '')
-    name = name.replace('.json', '')
-    name = name.replace('.', '_')
-    name = name.replace('/', '_')
 
     # Save as csv
     with open(direct + "/" + name + ".csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_NONNUMERIC)
-        for row in data_arr:
-            w.writerow(row)
-        pass
+        for param_id, statistic in data_dict.items():
+            w.writerow([param_id, statistic])
 
     f.close()
 
@@ -177,8 +189,8 @@ def test_run(model_path, params_path):
 
     # Run simulation 100 times for a single model
 
-    num_test_runs = 100
-    iterations = 1000
+    num_test_runs = 2   # FIXME
+    iterations = 10     # FIXME
 
     print('Running 100 tests on model: ' + model_path)
     print('Using params: ' + params_path)
@@ -252,9 +264,9 @@ def test_run(model_path, params_path):
     print(test_times_avgs)
 
     # Return:
-    # mean test score over number of test runs,
-    # mean over [mean time per test run],
-    # mean over [std of mean time per test run]
+    # mean test score over number of test runs for a single model,
+    # mean over 100*[mean time per test run],
+    # mean over 100*[std of mean time per test run]
     return np.nanmean(np.array(test_scores)), np.nanmean(np.array(test_times_avgs)), np.nanmean(np.array(test_times_stds))
 
 
@@ -265,40 +277,71 @@ def evaluate_measurements_per_param_specification(path, params):
     std_time_per_param_setting = dict()
     print(params)
     print()
+    # Iterate through all parameter settings on which models were trained
     for param_specification_id, model_folder_lst in params.items():
         print(param_specification_id)
         avg_score_per_model = []
         avg_time_per_model = []
         std_time_per_model = []
+        # Iterate through all models trained on a single parameter setting
         for model_folder in model_folder_lst:
             model_path = path + model_folder + '/final_model.zip'
             params_path = path + model_folder + '/params.json'
             print('Going to evaluate:' + model_folder)
+            # Evaluate each model 100 times and take the average score obtained per test run,
+            #                                        the average time needed to get to the goal per test run, and
+            #                                        the standard deviation of average time needed to get to the goal
+            #                                         per test run.
+            #                                         All measures averaged oder the 100 test runs per model:
             model_avg_score, avg_time_steps, avg_std_time_steps = test_run(model_path=model_path, params_path=params_path)  # Run 100 test runs per model
+            # Collect measurements for all models trained on given parameter setting
             avg_score_per_model.append(model_avg_score)
             avg_time_per_model.append(avg_time_steps)
             std_time_per_model.append(avg_std_time_steps)
+
             print('Avg Score: ' + str(model_avg_score))
             print('Avg time:' + str(avg_time_steps))
             print('Avg std of time steps needed: ' + str(avg_std_time_steps))
+
         print('Scores obtained: ')
         print(np.array(avg_score_per_model))
+        # Calculate averages per parameter setting/specification over all models trained on that parameter specification
         eval_scores_per_param_setting[param_specification_id] = np.nanmean(np.array(avg_score_per_model))
         mean_time_per_param_setting[param_specification_id] = np.nanmean(np.array(avg_time_per_model))
         std_time_per_param_setting[param_specification_id] = np.nanmean(np.array(std_time_per_model))
         print()
+
     print('Param-specification-Avg-scores:')
     print(eval_scores_per_param_setting)
     print(mean_time_per_param_setting)
     print(std_time_per_param_setting)
     print()
 
+    return eval_scores_per_param_setting, mean_time_per_param_setting, std_time_per_param_setting
+
 
 candidate_dirs, list_outtakes_failure = get_complete_trials(PATH_READ)
-used_dict, filtered_out = remove_redundant_runs(PATH_READ, candidate_dirs)
-evaluate_measurements_per_param_specification(PATH_READ, used_dict)
+# list_outtakes_failure == incomplete data sets
 
-not_used_dict = list_outtakes_failure + filtered_out
+used_dict, filtered_out = remove_redundant_runs(PATH_READ, candidate_dirs)
+# filtered_out == directories rejected due to max number of directories to include exceeded
+
+# used_dict == key : parameter-specification-id ; value : list of directories (including data of a single test run)
+#                                                         associated with a given parameter specification given by key
+
+not_used_lists = [list_outtakes_failure + filtered_out]
+
+eval_scores_per_param_setting, mean_time_per_param_setting, std_time_per_param_setting = \
+    evaluate_measurements_per_param_specification(PATH_READ, used_dict)
+
+# Save to file which data was included in final analysis and which wasn't
+save_which_data_was_used(PATH_WRITE+"EvaluatedData", used_dict, not_used_lists)
+
+save_dict_to_file(direct=PATH_WRITE+'Statistics', name='param_average_scores', data_dict=eval_scores_per_param_setting)
+save_dict_to_file(direct=PATH_WRITE+'Statistics', name='param_average_time', data_dict=mean_time_per_param_setting)
+save_dict_to_file(direct=PATH_WRITE+'Statistics', name='param_average_std_time', data_dict=std_time_per_param_setting)
+
+
 
 print('Complete and sufficient runs:')
 print(candidate_dirs)
@@ -308,5 +351,3 @@ print()
 print('Used parameter id\'s and the test runs that used them:')
 print(used_dict)
 
-
-save_which_data_was_used(PATH_WRITE+"EvaluatedData", used_dict, not_used_dict)
