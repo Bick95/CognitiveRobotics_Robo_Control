@@ -183,17 +183,13 @@ def save_mean_and_std_time_to_file(direct, name, data_dict_mean, data_dict_std):
     :return: -
     """
     create_dir(direct)
-    # Clean name which was itself a directory+name beforehand
-    name = name.replace('ParameterSettings/', '')
-    name = name.replace('.json', '')
-    name = name.replace('.', '_')
-    name = name.replace('/', '_')
 
     # Save as csv
     with open(direct + "/" + name + ".csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_NONNUMERIC)
+        w.writerow(['Parameter-specification-id', 'Mean grasping time steps', 'Mean std of mean grasping time steps'])
         for key in data_dict_mean.keys():
-            w.writerow([key, data_dict_mean[key], data_dict_std[key]])
+            w.writerow([clean_parameter_specification_id_string(key), data_dict_mean[key], data_dict_std[key]])
         pass
 
     f.close()

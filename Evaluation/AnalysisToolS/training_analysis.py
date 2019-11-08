@@ -349,15 +349,15 @@ candidate_dirs, list_outtakes_failure = get_complete_trials(PATH_READ)
 used_dict, filtered_out = remove_redundant_runs(PATH_READ, candidate_dirs)
 evaluate_measurements_per_param_specification(PATH_READ, used_dict)
 
-not_used_dict = list_outtakes_failure + filtered_out
+not_used_lists = [list_outtakes_failure, filtered_out]
 
 print('Complete and sufficient runs:')
 print(candidate_dirs)
 print('Outtakes:')
-print(not_used_dict)
+print(not_used_lists)
 print()
 print('Used parameter id\'s and the test runs that used them:')
 print(used_dict)
 
 
-save_which_data_was_used(PATH_WRITE+"EvaluatedData", used_dict, not_used_dict)
+save_which_data_was_used(PATH_WRITE+"EvaluatedData", used_dict, not_used_lists)
