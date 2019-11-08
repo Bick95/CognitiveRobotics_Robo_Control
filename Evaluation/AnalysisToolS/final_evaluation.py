@@ -57,6 +57,7 @@ def get_complete_trials(path):
 
     return dirs, list_outtakes
 
+
 def return_parameter_specification_id_for_file(file_name):
     """
         Given a folder name of a folder containing data created during model's training, the method returns which
@@ -72,6 +73,7 @@ def return_parameter_specification_id_for_file(file_name):
         return data['provided_params_file']
     except KeyError:
         return None
+
 
 def remove_redundant_runs(path, data_directories):
     """
@@ -108,6 +110,15 @@ def remove_redundant_runs(path, data_directories):
     return parameter_specification_ids, discarded_data_directories
 
 
+def clean_parameter_specification_id_string(param_id):
+    # Clean id which was itself a directory+id beforehand
+    param_id = param_id.replace('ParameterSettings/', '')
+    param_id = param_id.replace('.json', '')
+    param_id = param_id.replace('.', '_')
+    param_id = param_id.replace('/', '_')
+    return param_id
+
+
 def save_which_data_was_used(direct, used_dict, not_used_lists):
     """
         Specify which folders containing data were used for evaluation. Each folder contains all data generated during
@@ -121,34 +132,69 @@ def save_which_data_was_used(direct, used_dict, not_used_lists):
     """
     create_dir(direct)
 
-    print('Used:')
-    print(used_dict)
-    print('Not used:')
-    print(not_used_lists)
-
     # Save as csv which data was used (nicer to read)
     with open(direct + "/" + "used_data.csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_ALL)
+
+        # Save overview: for param-specification-id: [param-specification-id, count-of-used-models]
+        w.writerow(['-- Overview about how many models per parameter-specification were used for evaluation:'])
+        w.writerow(['Parameter specification id:', 'Count of models:'])
         for key, val_list in used_dict.items():
+            key = clean_parameter_specification_id_string(key)
+            w.writerow([key, len(val_list)])
+        w.writerow(['-- End of list.'])
+        w.writerow([''])
+
+        # Save actual data pairs [param-specification-id, used-data-set-containing-trained-model]
+        w.writerow(['-- Which models were used per parameter-specification:'])
+        w.writerow(['Parameter specification id:', 'Model:'])
+        for key, val_list in used_dict.items():
+            key = clean_parameter_specification_id_string(key)
             for val in val_list:
                 w.writerow([key, val])
+        w.writerow(['-- End of list.'])
     f.close()
 
     # Save as csv which data was not used (nicer to read)
     with open(direct + "/" + "not_used_data.csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_ALL)
-        w.writerow(['Incomplete data sets:'])
-        w.writerow([''])
+        w.writerow(['-- Incomplete data sets:'])
         for val in not_used_lists[0]:
             w.writerow([val])
+        w.writerow(['-- End of list.'])
         for _ in range(2):
             w.writerow([''])
-        w.writerow(['Excluded due to number of data directories to be included per param setting being exceeded:'])
-        w.writerow([''])
+        w.writerow(['-- Excluded due to number of data directories to be included per param setting being exceeded:'])
         for val in not_used_lists[1]:
             w.writerow([val])
-        w.writerow([''])
-        w.writerow(['-- Done.'])
+        w.writerow(['-- End of list.'])
+
+    f.close()
+
+
+def save_mean_and_std_time_to_file(direct, name, data_dict_mean, data_dict_std):
+    """
+        Write both average mean grasping time steps per parameter-specification-id and the corresponding std to file,
+        both in consecutive columns.
+    :param direct: Folder where to store emission file
+    :param name: Indication how to call resulting file
+    :param data_dict_mean: Dict containing mean grasping time steps per parameter-specification-id (saved row-wise)
+    :param data_dict_std: Dict containing mean std of mean grasping time steps per parameter-specification-id
+    :return: -
+    """
+    create_dir(direct)
+    # Clean name which was itself a directory+name beforehand
+    name = name.replace('ParameterSettings/', '')
+    name = name.replace('.json', '')
+    name = name.replace('.', '_')
+    name = name.replace('/', '_')
+
+    # Save as csv
+    with open(direct + "/" + name + ".csv", "w") as f:
+        w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_NONNUMERIC)
+        for key in data_dict_mean.keys():
+            w.writerow([key, data_dict_mean[key], data_dict_std[key]])
+        pass
 
     f.close()
 
@@ -190,7 +236,7 @@ def test_run(model_path, params_path):
     # Run simulation 100 times for a single model
 
     num_test_runs = 2   # FIXME
-    iterations = 10     # FIXME
+    iterations = 1000   # FIXME
 
     print('Running 100 tests on model: ' + model_path)
     print('Using params: ' + params_path)
@@ -199,8 +245,7 @@ def test_run(model_path, params_path):
     params = load_model_params(params_path)
     print(params)
 
-    # FIXME: remove again
-    params['render'] = True
+    #params['render'] = True
 
     # Creating test env
     env = PandaRobotEnv(renders=params['render'],
@@ -233,9 +278,8 @@ def test_run(model_path, params_path):
 
             reward, time_steps, done = info[0][:]
 
-            print(info)
-
-            time.sleep(0.1)
+            #print(info)
+            #time.sleep(0.1)
 
 
             if done:
@@ -313,7 +357,9 @@ def evaluate_measurements_per_param_specification(path, params):
 
     print('Param-specification-Avg-scores:')
     print(eval_scores_per_param_setting)
+    print('Param-specification-Avg-times:')
     print(mean_time_per_param_setting)
+    print('Param-specification-Avg-time-avg-std:')
     print(std_time_per_param_setting)
     print()
 
@@ -329,7 +375,7 @@ used_dict, filtered_out = remove_redundant_runs(PATH_READ, candidate_dirs)
 # used_dict == key : parameter-specification-id ; value : list of directories (including data of a single test run)
 #                                                         associated with a given parameter specification given by key
 
-not_used_lists = [list_outtakes_failure + filtered_out]
+not_used_lists = [list_outtakes_failure, filtered_out]
 
 eval_scores_per_param_setting, mean_time_per_param_setting, std_time_per_param_setting = \
     evaluate_measurements_per_param_specification(PATH_READ, used_dict)
@@ -340,13 +386,16 @@ save_which_data_was_used(PATH_WRITE+"EvaluatedData", used_dict, not_used_lists)
 save_dict_to_file(direct=PATH_WRITE+'Statistics', name='param_average_scores', data_dict=eval_scores_per_param_setting)
 save_dict_to_file(direct=PATH_WRITE+'Statistics', name='param_average_time', data_dict=mean_time_per_param_setting)
 save_dict_to_file(direct=PATH_WRITE+'Statistics', name='param_average_std_time', data_dict=std_time_per_param_setting)
-
+save_mean_and_std_time_to_file(direct=PATH_WRITE+'Statistics',
+                               name='param_average_time_and_avg_std',
+                               data_dict_mean=mean_time_per_param_setting,
+                               data_dict_std=std_time_per_param_setting)
 
 
 print('Complete and sufficient runs:')
 print(candidate_dirs)
 print('Outtakes:')
-print(not_used_dict)
+print(not_used_lists)
 print()
 print('Used parameter id\'s and the test runs that used them:')
 print(used_dict)

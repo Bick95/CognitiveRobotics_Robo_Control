@@ -104,13 +104,24 @@ def remove_redundant_runs(path, data_directories):
     return parameter_specification_ids, discarded_data_directories
 
 
-def save_which_data_was_used(direct, used_dict, not_used_list):
+def clean_parameter_specification_id_string(param_id):
+    # Clean id which was itself a directory+id beforehand
+    param_id = param_id.replace('ParameterSettings/', '')
+    param_id = param_id.replace('.json', '')
+    param_id = param_id.replace('.', '_')
+    param_id = param_id.replace('/', '_')
+    return param_id
+
+
+def save_which_data_was_used(direct, used_dict, not_used_lists):
     """
         Specify which folders containing data were used for evaluation. Each folder contains all data generated during
         a single training run.
     :param direct: Path to a folder containing all used/non-used folders/directories.
     :param used_dict: Dictionary containing the list of folders used for evaluation per param_setting_specification_id
-    :param not_used_list: List containing folders not used for evaluation
+    :param not_used_lists: Two list containing folders excluded from evaluation;
+                           1. Excluded due to being incomplete
+                           2. Excluded due to number of data directories to be included per param setting being exceeded
     :return: -
     """
     create_dir(direct)
@@ -118,16 +129,40 @@ def save_which_data_was_used(direct, used_dict, not_used_list):
     # Save as csv which data was used (nicer to read)
     with open(direct + "/" + "used_data.csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_ALL)
+
+        # Save overview: for param-specification-id: [param-specification-id, count-of-used-models]
+        w.writerow(['-- Overview about how many models per parameter-specification were used for evaluation:'])
+        w.writerow(['Parameter specification id:', 'Count of models:'])
         for key, val_list in used_dict.items():
+            key = clean_parameter_specification_id_string(key)
+            w.writerow([key, len(val_list)])
+        w.writerow(['-- End of list.'])
+        w.writerow([''])
+
+        # Save actual data pairs [param-specification-id, used-data-set-containing-trained-model]
+        w.writerow(['-- Which models were used per parameter-specification:'])
+        w.writerow(['Parameter specification id:', 'Model:'])
+        for key, val_list in used_dict.items():
+            key = clean_parameter_specification_id_string(key)
             for val in val_list:
                 w.writerow([key, val])
+        w.writerow(['-- End of list.'])
     f.close()
 
     # Save as csv which data was not used (nicer to read)
     with open(direct + "/" + "not_used_data.csv", "w") as f:
         w = csv.writer(f, dialect='excel', quoting=csv.QUOTE_ALL)
-        for val in not_used_list:
+        w.writerow(['-- Incomplete data sets:'])
+        for val in not_used_lists[0]:
             w.writerow([val])
+        w.writerow(['-- End of list.'])
+        for _ in range(2):
+            w.writerow([''])
+        w.writerow(['-- Excluded due to number of data directories to be included per param setting being exceeded:'])
+        for val in not_used_lists[1]:
+            w.writerow([val])
+        w.writerow(['-- End of list.'])
+
     f.close()
 
 
