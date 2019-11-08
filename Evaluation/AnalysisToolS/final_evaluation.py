@@ -228,10 +228,17 @@ def load_model_params(params_path):
 
 
 def test_run(model_path, params_path):
+    """
+        Performs 100 test runs for a given trained model. See method evaluate_measurements_per_param_specification()
+        for thorough explanation.
+    :param model_path: Path to a trained model.
+    :param params_path: Path to the file summarizing the parameters used for training the model.
+    :return:
+    """
 
     # Run simulation 100 times for a single model
 
-    num_test_runs = 2   # FIXME
+    num_test_runs = 100   # FIXME
     iterations = 1000   # FIXME
 
     print('Running 100 tests on model: ' + model_path)
@@ -314,26 +321,49 @@ def test_run(model_path, params_path):
 def evaluate_measurements_per_param_specification(path, params):
     """
         Iterates through all parameter settings used during training of models and all the models trained per parameter
-        setting. parameter setting is referred to by its parameter-setting/specification-id (=ID).
-        For each ID, the function iterates through all models that were trained using the ID. For each model, the
-        function obtains the average number of successful grasps per 1000 time steps (= 1 evaluation run) computed over
-        100 evaluation games.
+        setting. Parameter settings are referred to by their parameter-setting/specification-id (=ID).
+        For each ID, the function iterates through all models that were trained using the ID. For each of these models,
+        the function obtains the average number of successful grasps per 1000 time steps (= 1 evaluation run) computed
+        over 100 evaluation games. Finally, given the mean per model computed previously, the mean per model is
+        averaged over for all models belonging to a single ID (= parameter setting) in order to compute the mean number
+        of grasps per 1000 time steps per ID. This value per ID is returned in dictionary eval_scores_per_param_setting.
 
-        Also, the mean time to get into grasping position per ID is obtained by averaging over the mean times each model
-        needs for performing a successful grasp per 100 evaluation runs, which is computed as follows per model:
-            In each evaluation run, the time steps [needed from the last time the simulation was reset to the time step
-            when a successful grasping position is attained] are recorded for each successful grasp (= successfully
-            attaining valid graping position). Then, over each test run, the mean/average (here, the terms mean and
-            average are used interchangeably) number of time steps needed for a successful grasp is computed. After the
-            average time steps needed per successful grasp for each of the 100 test runs are recorded, these average
-            times are averaged over again in order to get the mean time needed for the model to get into grasping
-            position over 100 test runs. Then, the average number of time steps per successful grasp per model is
-            averaged over to get the average number of time steps per successful per ID.
-            This value gets returned as 'mean_time_per_param_setting' per ID.
-        Also the average standard deviation over the mean times
-    :param path:
-    :param params:
-    :return:
+        Also, the mean time to get into grasping position (including desired orientation of the end-effector) per ID is
+        obtained by averaging over the mean times each model belonging to a given ID needs for performing a successful
+        grasp. The mean time per model, again computed over 100 evaluation games, each taking 1000 time steps, is
+        computed as follows:
+
+            For each successful grasp (= successfully attaining valid graping position), the number of time steps needed
+            is computed by subtracting the time step at which the simulation was reset the last time from the time step
+            at which the successful grasping position is attained. For each of the 100 evaluation runs per model, the
+            mean number of time steps needed for attaining the grasping position is computed by averaging all the
+            numbers of time steps needed for attaining grasping position recorded for a given test run.
+            In the next step, the mean number of time steps needed for attaining grasping position for all evaluation
+            runs per model is averaged over in order to compute the mean number of time steps needed for attaining
+            grasping position per single model.
+            Again, by averaging over the mean number of time steps needed for attaining grasping position per model for
+            all models belonging to a certain ID, the corresponding number of time steps per ID (= parameter setting) is
+            computed.
+
+        This value per ID is returned via dictionary mean_time_per_param_setting.
+
+        Also the average standard deviation corresponding to the mean grasping times per ID is computed.
+        This happens as follows:
+
+            For each successful grasp, the number of time steps needed to get into grasping position is computed.
+            For each of the 100 evaluation runs per model, the respective standard deviation corresponding to the mean
+            number of time steps needed for attaining grasping position per test run per model is computed.
+            In the next step, the standard deviation computed in the previous step [per test run per model] is averaged
+            over in order to get the average standard deviation in terms of time steps per model. Then, the average
+            standard deviations per model are averaged over for all models belonging to a given ID (=parameter setting).
+
+        This value per ID is returned in std_time_per_param_setting.
+
+    :param path: Path to folder containing the folders in which trained models are located.
+    :param params: Dictionary: key = parameter-specification-id (=file-name of parameter-setting-file used for training)
+                               val = list of models' folders trained using parameter-id specified as corresponding key
+
+    :return: See above.
     """
     print('Params used and associated test runs:')
     eval_scores_per_param_setting = dict()
