@@ -1,9 +1,8 @@
 import os, sys
 import json, csv
 import numpy as np
-import time
+#import time
 
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 import gym
@@ -238,7 +237,7 @@ def test_run(model_path, params_path):
 
     # Run simulation 100 times for a single model
 
-    num_test_runs = 100   # FIXME
+    num_test_runs = 2   # FIXME
     iterations = 1000   # FIXME
 
     print('Running 100 tests on model: ' + model_path)

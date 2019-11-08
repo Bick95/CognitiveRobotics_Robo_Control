@@ -10,7 +10,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         path = sys.argv[1]
     else:
-        path = "Results/PandaController_2019_07_11__14_18_13__607206wkcalmujdq/final_model.zip"
+        path = "Results/PandaController_2019_07_11__12_38_56__003753pjrlfmwpaq/final_model.zip"
     if len(sys.argv) > 2:
         iterations = sys.argv[2]
     else:
