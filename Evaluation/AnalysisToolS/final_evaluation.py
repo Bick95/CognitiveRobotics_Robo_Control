@@ -239,7 +239,6 @@ def test_run(model_path, params_path):
 
     # Load params
     params = load_model_params(params_path)
-    print(params)
 
     #params['render'] = True
 
@@ -257,60 +256,85 @@ def test_run(model_path, params_path):
     model = PPO2.load(model_path)
 
     # Run simulation
-    test_scores = []  # Over 100 eval runs
-    test_times_avgs = []
-    test_times_stds = []
+    test_scores = []        # Over 100 eval runs
+    test_times_means = []   # Over 100 eval runs
+    test_times_stds = []    # Over 100 eval runs
+
     for _ in range(num_test_runs):
         score_over_test_run = 0
-        previous_time_steps = time_steps = 0
+        time_steps_at_previous_event = time_step_counter = 0
         reaching_times_over_test_run = []
         obs = env.reset()
 
-        while time_steps < iterations:
+        while time_step_counter < iterations:
 
-            env.envs[0].set_step_counter(time_steps)
-            action, _states = model.predict(obs)
+            env.envs[0].set_step_counter(time_step_counter)
+            action, _ = model.predict(obs)
             obs, _, _, info = env.step(action)  # Assumption: eval conducted on single env only!
 
-            reward, time_steps, done = info[0][:]
+            reward, time_step_counter, done = info[0][:]
 
             #print(info)
             #time.sleep(0.1)
 
 
             if done:
-                print('Accumulated rew.:' + str(score_over_test_run))
-                print('Time: ' + str(time_steps))
+                #print('Accumulated rew.:' + str(score_over_test_run))
+                #print('Time: ' + str(time_steps))
 
                 if reward > 0:
-                    score_over_test_run += reward
-                    time_steps_reaching = time_steps - previous_time_steps
+                    # Gripper has reached goal position & orientation
+                    score_over_test_run += reward  # Reward clipped to binary 0 | 1
+                    time_steps_reaching = time_step_counter - time_steps_at_previous_event
                     reaching_times_over_test_run.append(time_steps_reaching)
-                    print('Time to goal: ' + str(time_steps_reaching))
-                previous_time_steps = time_steps
+                    #print('Time to goal: ' + str(time_steps_reaching))
+                time_steps_at_previous_event = time_step_counter
 
-                print(score_over_test_run)
-                print(reaching_times_over_test_run)
+                #print(score_over_test_run)
+                #print(reaching_times_over_test_run)
 
                 obs = env.reset()
         test_scores.append(score_over_test_run)  # Test score obtained per test run
-        test_times_avgs.append(np.nanmean(np.array(reaching_times_over_test_run)))  # Average reaching time per test run
+        test_times_means.append(np.nanmean(np.array(reaching_times_over_test_run)))  # Average reaching time per test run
         test_times_stds.append(np.nanstd(np.array(reaching_times_over_test_run)))  # Std's of reaching time per test run
 
     # Return mean test score for model
     print('Scores:')
     print(test_scores)
     print('Times:')
-    print(test_times_avgs)
+    print(test_times_means)
 
     # Return:
     # mean test score over number of test runs for a single model,
     # mean over 100*[mean time per test run],
     # mean over 100*[std of mean time per test run]
-    return np.nanmean(np.array(test_scores)), np.nanmean(np.array(test_times_avgs)), np.nanmean(np.array(test_times_stds))
+    return np.nanmean(np.array(test_scores)), np.nanmean(np.array(test_times_means)), np.nanmean(np.array(test_times_stds))
 
 
 def evaluate_measurements_per_param_specification(path, params):
+    """
+        Iterates through all parameter settings used during training of models and all the models trained per parameter
+        setting. parameter setting is referred to by its parameter-setting/specification-id (=ID).
+        For each ID, the function iterates through all models that were trained using the ID. For each model, the
+        function obtains the average number of successful grasps per 1000 time steps (= 1 evaluation run) computed over
+        100 evaluation games.
+
+        Also, the mean time to get into grasping position per ID is obtained by averaging over the mean times each model
+        needs for performing a successful grasp per 100 evaluation runs, which is computed as follows per model:
+            In each evaluation run, the time steps [needed from the last time the simulation was reset to the time step
+            when a successful grasping position is attained] are recorded for each successful grasp (= successfully
+            attaining valid graping position). Then, over each test run, the mean/average (here, the terms mean and
+            average are used interchangeably) number of time steps needed for a successful grasp is computed. After the
+            average time steps needed per successful grasp for each of the 100 test runs are recorded, these average
+            times are averaged over again in order to get the mean time needed for the model to get into grasping
+            position over 100 test runs. Then, the average number of time steps per successful grasp per model is
+            averaged over to get the average number of time steps per successful per ID.
+            This value gets returned as 'mean_time_per_param_setting' per ID.
+        Also the average standard deviation over the mean times
+    :param path:
+    :param params:
+    :return:
+    """
     print('Params used and associated test runs:')
     eval_scores_per_param_setting = dict()
     mean_time_per_param_setting = dict()
