@@ -4,3 +4,6 @@
 [submodule "RobotModels/Pybullet_Robots"]
 	path = RobotModels/Pybullet_Robots
 	url = https://github.com/erwincoumans/pybullet_robots.git
+[submodule "Evaluation_CognitiveRobotics_Robo_Control"]
+	path = Evaluation_CognitiveRobotics_Robo_Control
+	url = https://github.com/Bick95/Evaluation_CognitiveRobotics_Robo_Control.git
