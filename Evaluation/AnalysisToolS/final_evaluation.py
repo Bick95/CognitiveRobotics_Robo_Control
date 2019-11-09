@@ -237,8 +237,8 @@ def test_run(model_path, params_path):
 
     # Run simulation 100 times for a single model
 
-    num_test_runs = 2   # FIXME
-    iterations = 1000   # FIXME
+    num_test_runs = 100
+    iterations = 1000
 
     print('Running 100 tests on model: ' + model_path)
     print('Using params: ' + params_path)
