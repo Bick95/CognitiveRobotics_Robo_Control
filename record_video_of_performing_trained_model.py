@@ -48,6 +48,7 @@ def create_dir(direct):
 
 
 def determine_save_path_components(model_path):
+    # Get model, used training state (checkpoint_x vs final_model), and the name of the env shown.
     path_parts = model_path.split("/")
     return path_parts[-2], path_parts[-1].replace('.zip', ''), path_parts[-3]
 
@@ -68,13 +69,13 @@ if __name__ == '__main__':
     else:
         path = "Evaluation_CognitiveRobotics_Robo_Control/Results/PPO2/"+DEFAULT_MODEL+"/final_model.zip"
 
-
-    env = PandaRobotEnv(renders=True, fixedActionRepetitions=True, evalFlag=True)  # Todo: could be adjusted to be dependent on parameters used during training.
+    env = PandaRobotEnv(renders=True, fixedActionRepetitions=True, evalFlag=False)  # Todo: could be adjusted to be dependent on parameters used during training.
     env = DummyVecEnv([lambda: env])  # The algorithms require a vectorized environment to run, hence vectorize
     
     try:
         model = PPO2.load(path)
     except ValueError:
+        # Problem when loading model. Probably wrong path provided.
         print('\nError: Make sure to have the pre-trained models available or to provide a valid path to a custom model as an argument.\n')
         print('Provided path: ' + path + '\n')
         sys.exit()
@@ -93,11 +94,9 @@ if __name__ == '__main__':
 
     
     # Enjoy trained agent
-    env.reset()
-    for _ in range(video_length + 1):
-        action = [env.action_space.sample()]
-        obs, _, _, _ = env.step(action)
-
-        if obs:
-            env.reset()
+    obs = env.reset()
+    for _ in range(num_videos * (video_length + 1)):
+        action, _ = model.predict(obs)
+        obs, reward, done, info = env.step(action)
+        #env.render()
     env.close()
