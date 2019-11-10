@@ -94,18 +94,8 @@ if __name__ == '__main__':
 
     
     # Enjoy trained agent
-    obs = env.reset()
-    time_step_counter = 0
-    while time_step_counter <= (num_videos*(video_length+1)):
-        env.envs[0].set_step_counter(time_step_counter)
-        action, _ = model.predict(obs)
-        obs, _, _, info = env.step(action)  # Assumption: eval conducted on single env only!
-
-        reward, time_step_counter, done = info[0][:]
-
-        # print(info)
-        #time.sleep(0.1)
-
-        if done:
-            time.sleep(1)
-            obs = env.reset()
+    env.reset()
+    for _ in range(video_length + 1):
+        action = [env.action_space.sample()]
+        obs, _, _, _ = env.step(action)
+    env.close()
