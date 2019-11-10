@@ -5,7 +5,6 @@ from customRobotEnv import PandaRobotEnv
 from stable_baselines.common.vec_env import DummyVecEnv, VecVideoRecorder
 
 from datetime import datetime
-import time
 
 import random
 import string
@@ -28,7 +27,7 @@ def random_string(length=5):
 
 # Specify parameters
 DEFAULT_MODEL = "PandaController_2019_08_11__15_41_05__262730fzyxnprhgl"
-VIDEO_LENGTH = 300
+VIDEO_LENGTH = 1000
 NUMBER_OF_RECORDINGS = 1
 
 # Specify save-directories
@@ -98,4 +97,7 @@ if __name__ == '__main__':
     for _ in range(video_length + 1):
         action = [env.action_space.sample()]
         obs, _, _, _ = env.step(action)
+
+        if obs:
+            env.reset()
     env.close()
