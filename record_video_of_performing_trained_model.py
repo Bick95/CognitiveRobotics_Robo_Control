@@ -29,7 +29,7 @@ def random_string(length=5):
 # Specify parameters
 DEFAULT_MODEL = "PandaController_2019_08_11__15_41_05__262730fzyxnprhgl"
 VIDEO_LENGTH = 100
-NUMBER_OF_RECORDINGS = 2
+NUMBER_OF_RECORDINGS = 1
 
 # Specify save-directories
 now = datetime.now()
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         path = "Evaluation_CognitiveRobotics_Robo_Control/Results/PPO2/"+DEFAULT_MODEL+"/final_model.zip"
 
 
-    env = PandaRobotEnv(renders=True, fixedActionRepetitions=True)  # Todo: could be adjusted to be dependent on parameters used during training.
+    env = PandaRobotEnv(renders=True, fixedActionRepetitions=True, evalFlag=True)  # Todo: could be adjusted to be dependent on parameters used during training.
     env = DummyVecEnv([lambda: env])  # The algorithms require a vectorized environment to run, hence vectorize
     
     try:

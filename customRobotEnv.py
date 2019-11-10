@@ -60,7 +60,7 @@ class PandaRobotEnv(gym.Env):
         self._renders = renders
         self._maxSteps = maxSteps
         self.terminated = 0
-        self._cam_dist = 1.3
+        self._cam_dist = 1.7
         self._cam_yaw = 180
         self._cam_pitch = -40
 
@@ -93,7 +93,7 @@ class PandaRobotEnv(gym.Env):
 
         if self._renders:
             cid = p.connect(p.SHARED_MEMORY)
-            if (cid < 0):
+            if cid < 0:
                 cid = p.connect(p.GUI)
             p.resetDebugVisualizerCamera(1.3, 180, -41, [0.52, -0.2, -0.33])
         else:
