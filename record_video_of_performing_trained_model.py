@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import gym
 from stable_baselines import PPO2
 from customRobotEnv import PandaRobotEnv
@@ -28,7 +28,7 @@ def random_string(length=5):
 
 # Specify parameters
 DEFAULT_MODEL = "PandaController_2019_08_11__15_41_05__262730fzyxnprhgl"
-VIDEO_LENGTH = 100
+VIDEO_LENGTH = 300
 NUMBER_OF_RECORDINGS = 1
 
 # Specify save-directories
@@ -36,6 +36,16 @@ now = datetime.now()
 TIME_STAMP = now.strftime("_%Y_%d_%m__%H_%M_%S__%f")
 RECORDING_ID = "Recording_" + TIME_STAMP + random_string()
 PATH_BASE = "VideoRecordings/"
+
+
+def create_dir(direct):
+    """
+        Ensure that a given path exists.
+        :param direct: Directory to be created when necessary.
+        :return: -
+    """
+    if not os.path.exists(direct):
+        os.makedirs(direct)
 
 
 def determine_save_path_components(model_path):
@@ -71,7 +81,8 @@ if __name__ == '__main__':
         sys.exit()
     
     video_id, video_folder, env_id = recording_destination_and_name(path)
-    video_length = 300
+    create_dir(video_folder)
+    video_length = VIDEO_LENGTH
     num_videos = NUMBER_OF_RECORDINGS
 
     # Record the video starting at the first step
@@ -84,10 +95,17 @@ if __name__ == '__main__':
     
     # Enjoy trained agent
     obs = env.reset()
-    for _ in range(num_videos*(video_length+1)):
-        action, _states = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
-        env.render()
-        if dones[0]:
+    time_step_counter = 0
+    while time_step_counter <= (num_videos*(video_length+1)):
+        env.envs[0].set_step_counter(time_step_counter)
+        action, _ = model.predict(obs)
+        obs, _, _, info = env.step(action)  # Assumption: eval conducted on single env only!
+
+        reward, time_step_counter, done = info[0][:]
+
+        # print(info)
+        #time.sleep(0.1)
+
+        if done:
             time.sleep(1)
-            env.reset()
+            obs = env.reset()
