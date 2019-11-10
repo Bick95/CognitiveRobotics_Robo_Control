@@ -12,12 +12,14 @@ import argparse
 import random
 import string
 
-def randomString(length=10):
+
+def random_string(length=10):
     """
         Generate a random string of given length
     """
     letters = string.ascii_lowercase
     return ''.join(random.choice(letters) for i in range(length))
+
 
 now = datetime.now()
 
@@ -25,7 +27,7 @@ now = datetime.now()
 ALGO = "PPO2"
 ENV_NAME = "PandaController"
 TIME_STAMP = now.strftime("_%Y_%d_%m__%H_%M_%S__%f")
-MODEL_ID = ENV_NAME + TIME_STAMP + randomString()
+MODEL_ID = ENV_NAME + TIME_STAMP + random_string()
 PATH = "Results/" + ALGO + "/" + MODEL_ID + "/"
 SUFFIX = "final_model"
 SAVE_MODEL_DESTINATION = PATH + SUFFIX          # For saving checkpoints and final model

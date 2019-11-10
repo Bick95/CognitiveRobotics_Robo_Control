@@ -22,7 +22,9 @@ largeValObservation = 100
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
-# TODO 2: define actual reward measure/function for final evaluation
+FRANKA_CONTROLLED_JOINTS = 7
+FRANKA_END_EFFECTOR_IDX = 9
+
 
 class PandaRobotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
@@ -99,8 +101,8 @@ class PandaRobotEnv(gym.Env):
         # timinglog = p.startStateLogging(p.STATE_LOGGING_PROFILE_TIMINGS, "kukaTimings.json")
         self.seed()
         self._robot = p.loadURDF(self._robo_path, basePosition=[0, 0, 0], useFixedBase=1)
-        self._num_joints = 7    # Nr of controlled joints
-        self._gripperIndex = 9  # Index of end-effector-link for Franka Emika Panda
+        self._num_joints = min(FRANKA_CONTROLLED_JOINTS, self._p.getNumJoints(self._robot))    # Nr of controlled joints
+        self._gripperIndex = min(FRANKA_END_EFFECTOR_IDX, self._p.getNumJoints(self._robot))    # Index of end-effector-link for Franka Emika Panda
         self.reset()
 
         observationDim = len(self.getExtendedObservation())

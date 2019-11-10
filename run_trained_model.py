@@ -11,7 +11,7 @@ if __name__ == '__main__':
         path = sys.argv[1]  # Provide the path to your custom model
     else:
     
-        path = "Evaluation_CognitiveRobotiRobo_Control/Results/PPO2/PandaController_2019_08_11__15_41_05__262730fzyxnprhgl/final_model.zip"
+        path = "Evaluation_CognitiveRobotics_Robo_Control/Results/PPO2/PandaController_2019_08_11__15_41_05__262730fzyxnprhgl/final_model.zip"
     
     if len(sys.argv) > 2:
         iterations = sys.argv[2]
