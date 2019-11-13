@@ -29,7 +29,7 @@ def callback(locals_, globals_):
         '''
             Logging:
                 ['Update_nr',                # Current count of weight updates performed so far
-                 'Grasps',                   # Nr of grasps over last X weight updates
+                 'Grasps',                   # Total nr of grasps over last X (by default 10) weight updates
                  'Avg_grasp_time_steps',     # Average of time steps needed in a simulation to get from init
                                              # pose to attaining goal, averaged over the time steps recorded
                                              # for all successful grasps over last X weight updates
