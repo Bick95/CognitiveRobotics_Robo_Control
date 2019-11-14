@@ -21,6 +21,8 @@ The RL agent was only given the following information:
 <li>The set of the robot's current joint angles in radians</li>
 </ul>
 All measurements were taken with respect to a universal coordinate system.
+As a reward signal, different reward functions were tested against each other.
+More about the theoretical background can e found in the attached report.
 
 
 In order to achieve this goal, the physics simulation software [Pybullet](https://pybullet.org/wordpress/) is employed, in which a [Franka Emika Panda](https://www.franka.de/technology), i.e. a robotic arm, is simulated.
@@ -37,6 +39,8 @@ Furthermore, drawing upon a separate repository devoted to the evaluation of thi
 An example video showing the evolution of the training progress of one trained PPO agent can be found on [YouTube]().
 
 ## Using the repository
+Note: The repository has been set up using Python 3.
+
 ### Installation/Setup
 Software needed for running the code used in this project can be installed using pip as follows:
 
@@ -49,5 +53,90 @@ For recording videos of trained agents, an extra software is needed. Under Ubunt
 
 '''sudo apt-get install ffmpeg'''
 
+To load the included submodules containing the robot models, trained models, and evaluation data, one has to manually load them by executing the following command when loading them for the first time:
+
+'''...'''
+
+To get updated versions of the submodules at some later point, call:
+
+'''...'''
+
 ### Instructions
+In the following, the separate functionalities are are quickly introduced.
+#### Training
+For training a new or existing PPO agent, the '''main.py''' file can be used.
+The file takes two optional arguments when being started:
+<ul>
+<li>'''-p''': A path to a json-file containing parameter specifications to be used for training.</li>
+<li>'''-r''': A path to a trained model which is supposed to be loaded for the continuation of its training.
+When continuing training, a new folder will be created and counting of weight updates starts at 0 again.
+However, the trained model is used and the path to the read-in model will be recoded in the documentations of used parameters,
+which are stored in both '''params.csv''' and '''params.json'''</li>
+</ul>
+
+For the training process, a folder '''Results/models_unique_folder''' is created in the repo, where '''models_unique_folder''' is a unique identifier for each model and
+the folder contains all data associated with the training process of the model. Checkpoints will be saved there, as well as documentation files etc.
+
+Example: Starting training a new agent with parameter settings specified in the file '''params_6.json''':
+'''python3 main.py -p ParameterSettings/params_6.json'''
+
+Example: Starting training a new agent with default parameter settings:
+'''python3 main.py'''
+
+#### Replaying
+A trained model can be visually inspected using the '''run_trained_model.py''' file.
+Starting the file, 0, 1 or 2 arguments can be provided.
+
+Example: Observe how a given trained default model performs:
+
+'''python3 run_trained_model.py'''
+
+Example: Run a specific model provided to the code as an argument:
+
+'''python3 run_trained_model.py Evaluation_CognitiveRobotics_Robo_Control/Results/PPO2/PandaController_2019_08_11__15_41_05__262730fzyxnprhgl/final_model.zip'''
+
+Example: Run a specific model provided to the code as a first(!) argument for 1000 time steps given as a second(!) argument:
+
+'''python3 run_trained_model.py Evaluation_CognitiveRobotics_Robo_Control/Results/PPO2/PandaController_2019_08_11__15_41_05__262730fzyxnprhgl/final_model.zip 1000'''
+
+**Note**: In case that the data cannot be found, make sure to load the submodules (as described above).
+
+#### Recording video sequence
+'''record_video_of_performing_trained_model.py''' is the file to record video sequences of a trained agent.
+It will create the file structure '''VideoRecordings/model_name/Recording_date_some_info.mp4'''.
+
+It can be called without any arguments to record videos of a default model.
+Alternatively, it can also be called given an argument, which is supposed to be a path to a trained model.
+
+Example: Record a video sequence of a default model:
+
+'''python3 record_video_of_performing_trained_model.py'''
+
+Example: Record a video sequence of a specific model:
+
+'''python3 record_video_of_performing_trained_model.py Evaluation_CognitiveRobotics_Robo_Control/Results/PPO2/PandaController_2019_08_11__15_41_05__262730fzyxnprhgl/final_model.zip'''
+
+**Note**: By default, all video sequences are supposed to last 1000 time steps of the simulation.
+To change this, adjust the value '''VIDEO_LENGTH''' in the said file.
+However, due to technical issues, there is still a tendency for videos to encompass more time steps that the provided number.
+
+#### Evaluation
+The included git-submodule '''Evaluation_CognitiveRobotics_Robo_Control''' contains a set of trained models, the evaluations of both the training and the final training outcome,
+and the tools used for the evaluation.
+
+The tools contain a lot of inline-code and extensive class definitions explaining how the evaluation is done. Feel free to consult the attached project report for an overview.
+
+All trained models are saved in separate folders. Their folders contain Training-check-points, files describing which parameters were used for training, and a documentation of the training process.
+
+#### Further files:
+
+##### callback.py
+'''callback.py''' is used by the PPO agent to log training progress and to save checkpoints.
+
+##### start.sh
+'''start.sh''' is not particularly important to the project, but is the script for running the training process on the [University's Peregrine cluster](https://www.rug.nl/society-business/centre-for-information-technology/research/services/hpc/facilities/peregrine-hpc-cluster).
+It has been attached for convenience of the developers.
+
+##### kukaGymEnv.py
+'''kukaGymEnv.py''' served as inspiration for designing our own Gym environment. It is copied from the example environments shipped with the Pybullet installation and kept for comparison.
 
