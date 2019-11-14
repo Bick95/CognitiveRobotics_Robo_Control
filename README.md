@@ -55,11 +55,13 @@ For recording videos of trained agents, an extra software is needed. Under Ubunt
 
 To load the included submodules containing the robot models, trained models, and evaluation data, one has to manually load them by executing the following command when loading them for the first time:
 
-'''...'''
+'''git submodule update --init --recursive'''
 
 To get updated versions of the submodules at some later point, call:
 
-'''...'''
+'''git submodule update --recursive --remote'''
+
+**Note**: In case of problems, check out [StackOverflow](https://stackoverflow.com/questions/1030169/easy-way-to-pull-latest-of-all-git-submodules)
 
 ### Instructions
 In the following, the separate functionalities are are quickly introduced.
@@ -135,8 +137,9 @@ All trained models are saved in separate folders. Their folders contain Training
 
 ##### start.sh
 '''start.sh''' is not particularly important to the project, but is the script for running the training process on the [University's Peregrine cluster](https://www.rug.nl/society-business/centre-for-information-technology/research/services/hpc/facilities/peregrine-hpc-cluster).
-It has been attached for convenience of the developers.
+It has been attached and kept for convenience of the developers.
 
 ##### kukaGymEnv.py
 '''kukaGymEnv.py''' served as inspiration for designing our own Gym environment. It is copied from the example environments shipped with the Pybullet installation and kept for comparison.
 
+That's it. Have fun with the repository!
