@@ -11,18 +11,18 @@ The goal of the project can be summarized as follows:
 </ul>
 
 More precisely, the attempt was made to to train an Reinforcement Learning (RL) agent to control a robotic arm in joint space without having to perform possibly expensive Inverse Kinematics operations.
-The goal of the controller is to compute changes to be applied to the current joint angles of all controlled joints in order to make the robotic arm attain a given goal location and to have the fingers of the arm's end#effector's gripper point towards the goal location.
+The goal of the controller is to compute changes to be applied to the current joint angles of all controlled joints in order to make the robotic arm attain a given goal location and to have the fingers of the arm's end-effector's gripper point towards the goal location.
 The RL agent was only given the following information:
 <ul>
 <li>The goal position in Cartesian space</li>
-<li>Its end-effector's Center of Mass'es (COM) Cartesian position</li>
+<li>Its end-effector's Center of Mass (COM) Cartesian position</li>
 <li>The normalized vector expressing the orientation of the end-effector's fingers</li>
 <li>The normalized vector pointing from the end-effector's COM towards the goal location</li>
 <li>The set of the robot's current joint angles in radians</li>
 </ul>
 All measurements were taken with respect to a universal coordinate system.
 As a reward signal, different reward functions were tested against each other.
-More about the theoretical background can e found in the attached report.
+More about the theoretical background can be found in the attached report.
 
 
 In order to achieve this goal, the physics simulation software [Pybullet](https://pybullet.org/wordpress/) is employed, in which a [Franka Emika Panda](https://www.franka.de/technology), i.e. a robotic arm, is simulated.
@@ -30,7 +30,7 @@ The simulated arm is controlled by a [Proximal Policy Optimization (PPO)](https:
 A customized [Gym environment](https://gym.openai.com/), called **PandaRobotEnv** and defined in '''customRobotEnv.py''', acts as a bridge between the Pybullet simulation and the PPO agent.
 The model of the robotic arm is provided by [pybullet_robots](https://github.com/erwincoumans/pybullet_robots).
 For designing the aforementioned PandaRobotEnv, the **KukaGymEnv**, included in this repository as a reference environment and originally shipped with the Pybullet installation, served as inspiration for designing some core functions.
-However, except for the rendering functionality, where just a few parameters were adapted, and some variable names, the used Gym environment's functionality has been thoroughly redesigned and augmented in order to meet our custom goals and to be compatible with both Stable-Baselines' PPO implementation and the Franka Emika Panda.
+However the used Gym environment's functionality has been thoroughly redesigned and augmented in order to meet our custom goals and to be compatible with both Stable-Baselines' PPO implementation and the Franka Emika Panda. 
 
 This repository contains functionality to train PPO agents on controlling a Franka Emika Panda in joint using different reward functions and modes as well as to both visually render and record the performance of trained PPO agents performing their assigned task.
 
