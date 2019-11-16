@@ -30,7 +30,7 @@ The simulated arm is controlled by a [Proximal Policy Optimization (PPO)](https:
 A customized [Gym environment](https://gym.openai.com/), called **PandaRobotEnv** and defined in <code>customRobotEnv.py</code>, acts as a bridge between the Pybullet simulation and the PPO agent.
 The model of the robotic arm is provided by [pybullet_robots](https://github.com/erwincoumans/pybullet_robots).
 For designing the aforementioned PandaRobotEnv, the **KukaGymEnv**, included in this repository as a reference environment and originally shipped with the Pybullet installation, served as inspiration for designing some core functions.
-However the used Gym environment's functionality has been thoroughly redesigned and augmented in order to meet our custom goals and to be compatible with both Stable-Baselines' PPO implementation and the Franka Emika Panda. 
+However, the used Gym environment's functionality has been thoroughly redesigned and augmented in order to meet our custom goals and to be compatible with both Stable-Baselines' PPO implementation and the Franka Emika Panda. 
 
 This repository contains functionality to train PPO agents on controlling a Franka Emika Panda in joint using different reward functions and modes as well as to both visually render and record the performance of trained PPO agents performing their assigned task.
 
