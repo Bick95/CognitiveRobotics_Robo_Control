@@ -22,7 +22,7 @@ The RL agent was only given the following information:
 </ul>
 All measurements were taken with respect to a universal coordinate system.
 As a reward signal, different reward functions were tested against each other.
-More about the theoretical background can be found in the attached report.
+More about the theoretical background can be found in the attached report (which is currently not yet available due to work in progress behind the scenes).
 
 
 In order to achieve this goal, the physics simulation software [Pybullet](https://pybullet.org/wordpress/) is employed, in which a [Franka Emika Panda](https://www.franka.de/technology), i.e. a robotic arm, is simulated.
